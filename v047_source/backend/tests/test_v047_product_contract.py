@@ -100,7 +100,7 @@ def test_user_visible_branding_and_release_contract():
     spec = (root / "build/VKOutreachManagerMac.spec").read_text(encoding="utf-8")
     build = (root / "build/BUILD_MACOS.sh").read_text(encoding="utf-8")
     assert 'title="VK Search"' in main
-    assert 'version="0.4.8"' in main
+    assert 'version="0.4.9"' in main
     assert 'name="VK Search.app"' in spec
     assert 'CFBundleDisplayName": "VK Search"' in spec
-    assert "VK_Search_0.4.8_macOS_arm64.dmg" in build
+    assert "VK_Search_0.4.9_macOS_arm64.dmg" in build
