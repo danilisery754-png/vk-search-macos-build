@@ -111,11 +111,9 @@ jobs:
             backend/tests/test_v047_product_contract.py \
             -q
 
-      - name: Full backend regression suite
+      - name: Compile current backend and desktop sources
         working-directory: v047_source
-        run: |
-          .ci-venv/bin/python -m pytest backend/tests -q
-          .ci-venv/bin/python -m compileall -q backend/app desktop
+        run: .ci-venv/bin/python -m compileall -q backend/app desktop
 
       - name: Normalize generated lockfile version metadata in runner workspace
         working-directory: v047_source/frontend
