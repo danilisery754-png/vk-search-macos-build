@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>VK Search</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.__VK_UI_BOOTED__ = false;
+      window.setTimeout(function () {
+        if (window.__VK_UI_BOOTED__ === true) return;
+        var root = document.getElementById('root');
+        if (!root) return;
+        root.innerHTML = '<div id="vk-ui-bootstrap-failure" style="box-sizing:border-box;min-height:100vh;padding:48px;background:#09101d;color:#fff;font:600 18px/1.6 Segoe UI,Arial,sans-serif"><div style="max-width:720px;margin:10vh auto;padding:28px;border:1px solid #fb7185;border-radius:14px;background:#24121a"><strong style="display:block;font-size:22px;margin-bottom:10px">Интерфейс приложения не запустился.</strong><span style="color:#ffd4dc">Приложение попробует открыть интерфейс в браузере.</span></div></div>';
+      }, 7000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

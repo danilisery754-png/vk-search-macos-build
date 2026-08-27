@@ -1,0 +1,49 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  test-and-build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.15'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Backend tests
+        shell: pwsh
+        run: |
+          py -3.13 -m venv .ci-venv
+          .\.ci-venv\Scripts\python.exe -m pip install -e ".\backend[dev,desktop]"
+          Push-Location backend
+          ..\.ci-venv\Scripts\python.exe -m pytest
+          Pop-Location
+      - name: Frontend checks
+        shell: pwsh
+        run: |
+          Push-Location frontend
+          npm ci
+          npm test
+          npm run build
+          Pop-Location
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Build installer and portable
+        shell: pwsh
+        run: .\build\BUILD_WINDOWS.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VK-Outreach-Manager-Windows-0.3.3
+          path: build/release/VK_Outreach_Manager_Setup_0.3.3.exe
+          if-no-files-found: error
+          compression-level: 0

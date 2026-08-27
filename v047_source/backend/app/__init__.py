@@ -1,0 +1,3 @@
+"""VK Outreach Manager backend."""
+
+__version__ = "0.4.0"

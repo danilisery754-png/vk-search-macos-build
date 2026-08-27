@@ -1,0 +1,243 @@
+/* VK Search v0.4.9 — exact viewport, stable work scaling and messenger polish. */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+body {
+  min-height: 0 !important;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app-shell {
+  width: 100%;
+  height: 100% !important;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar,
+.workspace {
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background: var(--bg);
+}
+
+.work-scale-root {
+  --work-scale: 1;
+  transform-origin: top left;
+  overflow: visible !important;
+  box-sizing: border-box;
+}
+
+/* The same packaged avatar is used by the app bundle and the sidebar. A CSS
+   background cannot render the browser's broken-image question-mark glyph. */
+.brand-mark {
+  overflow: hidden;
+  padding: 0;
+  background-color: #14233b;
+  background-image: url('/vk-search-icon.jpg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.scale-save-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scale-save-row small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+/* Dialog list preview */
+.inbox-view-tabs button {
+  min-width: 0;
+}
+
+.dialog-group > button > .dialog-card-copy.dialog-card-copy {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dialog-title-row > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-title-row > time {
+  flex: 0 0 auto;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6e7d96;
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dialog-preview {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #7e8da6 !important;
+  line-height: 1.3;
+}
+
+.dialog-unread {
+  flex: 0 0 auto;
+}
+
+/* Composer: one compact vertical action stack, no dead right-side tools strip. */
+.composer {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-areas:
+    'identity identity'
+    'reply reply'
+    'input controls' !important;
+  align-items: end;
+  column-gap: 8px;
+  row-gap: 7px;
+  padding-top: 11px !important;
+}
+
+.composer .reply-account {
+  grid-area: identity;
+  position: static !important;
+  align-self: center;
+  padding: 0 3px;
+}
+
+.composer .composer-reply {
+  grid-area: reply;
+  position: static !important;
+}
+
+.composer > textarea[aria-label='Ответ'] {
+  grid-area: input;
+  min-width: 0;
+  width: 100%;
+  min-height: 70px;
+  padding: 10px 11px !important;
+  align-self: stretch;
+}
+
+.composer-control-stack {
+  grid-area: controls;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 106px;
+  min-width: 106px;
+  z-index: 8;
+}
+
+.composer-icon-action {
+  width: 100%;
+  height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111d31;
+  color: #b4c3da;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.composer-icon-action:hover {
+  background: #182841;
+  color: #e2ebfb;
+}
+
+.composer-control-stack > .button[type='submit'] {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.composer-control-stack .composer-popover {
+  position: absolute !important;
+  left: auto !important;
+  right: calc(100% + 8px) !important;
+  top: auto !important;
+  bottom: 0 !important;
+  max-height: min(420px, 55vh);
+  z-index: 30;
+}
+
+.composer-control-stack .composer-popover--emoji {
+  overflow: visible;
+}
+
+.composer-control-stack .composer-popover--emoji .emoji-picker {
+  position: relative !important;
+  inset: auto !important;
+  max-height: min(420px, 55vh);
+}
+
+.composer-control-stack .quick-replies-popover.composer-popover {
+  width: min(420px, 70vw);
+  overflow: auto;
+}
+
+/* Visual account ordering: data/actions stay untouched; only the card position moves. */
+.account-card[draggable='false'] {
+  cursor: default;
+}
+
+.account-card[draggable='true'] {
+  cursor: grab;
+  border-color: rgba(91, 143, 243, .34);
+}
+
+.account-card--dragging {
+  cursor: grabbing !important;
+  opacity: .64;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
+}

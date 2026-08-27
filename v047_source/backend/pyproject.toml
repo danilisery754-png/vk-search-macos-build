@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vk-outreach-manager"
+version = "0.4.9"
+description = "Локальное Windows-приложение для работы с обращениями в сообщества VK"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "alembic==1.16.5",
+  "cryptography==46.0.0",
+  "fastapi==0.116.1",
+  "httpx==0.28.1",
+  "openpyxl==3.1.5",
+  "playwright==1.55.0",
+  "pydantic-settings==2.10.1",
+  "python-multipart==0.0.20",
+  "sqlalchemy==2.0.43",
+  "uvicorn[standard]==0.35.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+  "pytest-cov==6.2.1",
+]
+desktop = [
+  "pyinstaller==6.15.0",
+  "pillow==11.3.0",
+  "pystray==0.19.5",
+  "pywebview==6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

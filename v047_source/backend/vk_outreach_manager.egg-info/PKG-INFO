@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: vk-outreach-manager
+Version: 0.4.7
+Summary: Локальное Windows-приложение для работы с обращениями в сообщества VK
+Requires-Python: <3.14,>=3.12
+Requires-Dist: alembic==1.16.5
+Requires-Dist: cryptography==46.0.0
+Requires-Dist: fastapi==0.116.1
+Requires-Dist: httpx==0.28.1
+Requires-Dist: openpyxl==3.1.5
+Requires-Dist: playwright==1.55.0
+Requires-Dist: pydantic-settings==2.10.1
+Requires-Dist: python-multipart==0.0.20
+Requires-Dist: sqlalchemy==2.0.43
+Requires-Dist: uvicorn[standard]==0.35.0
+Provides-Extra: dev
+Requires-Dist: pytest==8.4.1; extra == "dev"
+Requires-Dist: pytest-asyncio==1.1.0; extra == "dev"
+Requires-Dist: pytest-cov==6.2.1; extra == "dev"
+Provides-Extra: desktop
+Requires-Dist: pyinstaller==6.15.0; extra == "desktop"
+Requires-Dist: pillow==11.3.0; extra == "desktop"
+Requires-Dist: pystray==0.19.5; extra == "desktop"
+Requires-Dist: pywebview==6.0; extra == "desktop"
