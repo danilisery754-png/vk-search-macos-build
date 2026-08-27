@@ -1,0 +1,1 @@
+# vk-search-macos-build
