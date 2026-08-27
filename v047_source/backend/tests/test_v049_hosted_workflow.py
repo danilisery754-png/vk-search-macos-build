@@ -21,6 +21,8 @@ def test_v049_release_workflow_restores_assets_and_runs_full_verification_before
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "Restore generated image assets" in text
     assert "backend/tests/test_v049_behavior.py" in text
+    assert "backend/tests/test_v049_hosted_workflow.py" in text
+    assert "backend/tests/test_v049_self_hosted_workflow.py" not in text
     assert "backend/tests/test_v049_static_assets.py" in text
     assert "backend/tests/test_v049_archive_sync.py" in text
     assert "backend/tests/test_v049_routes.py" in text
