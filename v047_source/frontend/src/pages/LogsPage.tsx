@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Copy, FileClock, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { useSessionUiStore } from '../components/SessionUiStore'
 import { Card, EmptyState, PageHeader } from '../components/ui'
 import { formatLocalDateTime } from '../utils/time'
 
@@ -10,6 +11,15 @@ interface LogEntry {
   account_id: number | null; work_item_id: number | null; account_display_name?: string | null; message: string; technical: Record<string, unknown>
 }
 
+interface LogsSessionUi {
+  search: string
+  level: string
+  category: string
+  expandedIds: number[]
+  scrollTop: number
+}
+
+const LOGS_SESSION_KEY = 'logs'
 const categoryLabels: Record<string, string> = { outreach: 'Рассылка', messages: 'Сообщения', auth: 'Авторизация', system: 'Система', all: 'Все' }
 
 function routeTone(value: unknown) {
@@ -18,17 +28,40 @@ function routeTone(value: unknown) {
 }
 
 export default function LogsPage() {
-  const [search, setSearch] = useState('')
-  const [level, setLevel] = useState('all')
-  const [category, setCategory] = useState('outreach')
-  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const uiStore = useSessionUiStore()
+  const remembered = uiStore.read<LogsSessionUi>(LOGS_SESSION_KEY)
+  const [search, setSearch] = useState(remembered?.search ?? '')
+  const [level, setLevel] = useState(remembered?.level || 'all')
+  const [category, setCategory] = useState(remembered?.category || 'outreach')
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(remembered?.expandedIds || []))
+  const [scrollTop, setScrollTop] = useState(remembered?.scrollTop ?? 0)
+  const logListRef = useRef<HTMLDivElement>(null)
   const query = new URLSearchParams({ limit: '1000', ...(category !== 'all' ? { category } : {}), ...(level !== 'all' ? { level } : {}) }).toString()
   const logs = useQuery({ queryKey: ['logs', category, level], queryFn: () => api<LogEntry[]>(`/logs?${query}`), refetchInterval: 3000 })
   const rows = useMemo(() => (logs.data || []).filter(row => row.message.toLowerCase().includes(search.toLowerCase())), [logs.data, search])
 
+  useEffect(() => {
+    if (!logs.data) return
+    const existing = new Set(logs.data.map(row => row.id))
+    setExpanded(previous => {
+      const next = new Set([...previous].filter(id => existing.has(id)))
+      if (next.size === previous.size && [...next].every(id => previous.has(id))) return previous
+      return next
+    })
+  }, [logs.data])
+
+  useEffect(() => {
+    if (!logListRef.current) return
+    logListRef.current.scrollTop = scrollTop
+  }, [rows.length, category, level])
+
+  useEffect(() => {
+    uiStore.write<LogsSessionUi>(LOGS_SESSION_KEY, { search, level, category, expandedIds: [...expanded], scrollTop })
+  }, [uiStore, search, level, category, expanded, scrollTop])
+
   return <div className="page"><PageHeader title="Логи" description="Рассылка по умолчанию; системные события остаются доступными отдельным фильтром" /><Card className="table-card">
     <div className="table-toolbar"><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск по событиям" /></label><select value={category} onChange={e => setCategory(e.target.value)}>{['outreach','messages','auth','system','all'].map(value => <option key={value} value={value}>{categoryLabels[value]}</option>)}</select><select value={level} onChange={e => setLevel(e.target.value)}><option value="all">Все уровни</option><option value="info">Обычные</option><option value="warning">Предупреждения</option><option value="error">Ошибки</option></select></div>
-    {!rows.length ? <EmptyState icon={<FileClock />} title="Событий пока нет" text={category === 'outreach' ? 'Здесь появится понятная история отправок по группам.' : 'Для выбранного фильтра событий нет.'} /> : <div className="log-list">{rows.map(row => {
+    {!rows.length ? <EmptyState icon={<FileClock />} title="Событий пока нет" text={category === 'outreach' ? 'Здесь появится понятная история отправок по группам.' : 'Для выбранного фильтра событий нет.'} /> : <div className="log-list" ref={logListRef} onScroll={event => setScrollTop(event.currentTarget.scrollTop)}>{rows.map(row => {
       const tech = row.technical || {}; const hasTechnical = Object.keys(tech).length > 0; const open = expanded.has(row.id); const outreach = row.category === 'outreach' && row.event_type === 'outreach_result'
       return <article key={row.id} className={`log-entry log-row--${row.level} ${outreach ? 'outreach-log' : ''}`}>
         {outreach ? <div className="outreach-log-row"><time>{formatLocalDateTime(row.created_at)}</time><img src={String(tech.account_avatar_url || '')} alt="" onError={event => { event.currentTarget.style.visibility = 'hidden' }} /><div className="outreach-main"><strong>{String(row.account_display_name || tech.account_name || `Аккаунт #${row.account_id || ''}`)}</strong><span>{String(tech.outcome) === 'success' ? ' написал ' : ' не удалось написать '}<a href={String(tech.community_url || '#')} target="_blank" rel="noreferrer">{String(tech.community_name || tech.community_url || 'сообщество')}</a><button aria-label="Скопировать ссылку" onClick={() => navigator.clipboard?.writeText(String(tech.community_url || ''))}><Copy size={12} /></button></span></div><div className={`route-chip route-chip--${routeTone(tech.message_state)}`}>ЛС</div><div className={`route-chip route-chip--${routeTone(tech.suggested_state)}`}>Предложка</div>{hasTechnical && <button className="log-expand" onClick={() => setExpanded(previous => { const next = new Set(previous); next.has(row.id) ? next.delete(row.id) : next.add(row.id); return next })}><ChevronDown size={15} className={open ? 'rotate' : ''} /></button>}</div> : <button className="log-row" onClick={() => hasTechnical && setExpanded(previous => { const next = new Set(previous); next.has(row.id) ? next.delete(row.id) : next.add(row.id); return next })}><time>{formatLocalDateTime(row.created_at)}</time><i /><div><p>{row.message}</p>{(row.account_id || row.work_item_id) && <small>{row.account_id && `Аккаунт #${row.account_id}`} {row.work_item_id && `Группа в работе #${row.work_item_id}`}</small>}</div>{hasTechnical && <ChevronDown size={15} className={open ? 'rotate' : ''} />}</button>}

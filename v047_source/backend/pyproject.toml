@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vk-outreach-manager"
-version = "0.4.9"
+version = "0.4.10"
 description = "Локальное Windows-приложение для работы с обращениями в сообщества VK"
 requires-python = ">=3.12,<3.14"
 dependencies = [

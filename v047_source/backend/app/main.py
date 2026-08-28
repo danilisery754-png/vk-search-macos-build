@@ -106,7 +106,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         await app.state.services.supervisor.stop()
         app.state.services.engine.dispose()
 
-    app = FastAPI(title="VK Search", version="0.4.9", lifespan=lifespan)
+    app = FastAPI(title="VK Search", version="0.4.10", lifespan=lifespan)
     app.include_router(router)
     app.include_router(account_health_router)
     app.include_router(v049_router)

@@ -1,0 +1,483 @@
+/* VK Search v0.4.10 — one scale coordinate system for the entire application. */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.app-viewport {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+}
+
+.app-scale-layer {
+  position: relative;
+  transform-origin: top left;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app-scale-layer > .app-shell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+}
+
+/* v0.4.9 scaled only main; v0.4.10 explicitly removes that second scale. */
+.work-scale-root {
+  zoom: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.sidebar {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.sidebar nav {
+  min-height: max-content;
+}
+
+.workspace,
+.workspace main {
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace main {
+  overflow: auto !important;
+  scrollbar-gutter: stable both-edges;
+}
+
+.window-bar {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex-wrap: nowrap;
+}
+
+.window-bar > .icon-button,
+.window-bar > .window-work-controls,
+.window-bar > .window-indicators {
+  flex-shrink: 0;
+}
+
+.window-bar .global-search {
+  width: 290px;
+  min-width: 180px;
+  flex: 0 1 290px;
+}
+
+/* Ordinary action rows must wrap rather than vanish behind an overflow boundary. */
+.page-header {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.page-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.table-toolbar {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.table-toolbar > * {
+  min-width: 0;
+}
+
+.toolbar-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.toolbar-actions > *,
+.page-actions > * {
+  flex-shrink: 0;
+}
+
+.settings-section-head {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.settings-section-head > div:not(.settings-icon) {
+  min-width: 0;
+}
+
+.auth-banner {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.auth-banner > div {
+  min-width: 0;
+}
+
+.result-summary {
+  height: auto;
+  min-height: 84px;
+  flex-wrap: wrap;
+}
+
+.result-summary > p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Portals stay inside the same zoomed shell. Physical-window bounds are supplied inline. */
+.app-overlay-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: visible;
+}
+
+.app-overlay-root > * {
+  pointer-events: auto;
+}
+
+.scaled-overlay {
+  z-index: 1001;
+  width: max-content;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.scaled-viewport-overlay {
+  z-index: 1002;
+  overflow: hidden;
+}
+
+.app-overlay-root .context-menu {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.app-overlay-root .account-menu {
+  position: static !important;
+  inset: auto !important;
+  max-width: 260px;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.app-overlay-root .composer-popover {
+  position: static !important;
+  inset: auto !important;
+  width: min(420px, 100%);
+  max-width: 100%;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.app-overlay-root .composer-popover--emoji {
+  overflow: visible;
+}
+
+.app-overlay-root .composer-popover--emoji .emoji-picker {
+  position: static !important;
+  inset: auto !important;
+  width: min(420px, 100%);
+  max-width: 100%;
+  max-height: 420px;
+}
+
+.app-overlay-root .quick-replies-popover.composer-popover {
+  width: min(420px, 100%);
+}
+
+.app-overlay-root .run-selector-panel {
+  position: static !important;
+  inset: auto !important;
+  width: min(430px, 100%);
+  max-width: 100%;
+  max-height: 480px;
+}
+
+/* Full-window surfaces fill the currently visible physical viewport, not the enlarged logical canvas. */
+.app-overlay-root .scaled-viewport-overlay > .modal-backdrop,
+.app-overlay-root .scaled-viewport-overlay > .drawer-backdrop {
+  position: static !important;
+  inset: auto !important;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.app-overlay-root .forward-picker {
+  width: min(440px, 90%);
+  max-width: 90%;
+  max-height: 70%;
+}
+
+.app-overlay-root .history-drawer {
+  width: min(560px, 92%);
+  max-width: 92%;
+  height: 100%;
+  max-height: 100%;
+}
+
+/* Settings may overflow and scroll when zoomed; it must not re-layout because of the scale itself. */
+.page--settings {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.settings-layout {
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+}
+
+.settings-content,
+.settings-content--bounded {
+  min-width: 0;
+  min-height: 0;
+}
+
+.settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.settings-grid > *,
+.settings-content .field,
+.settings-content input,
+.settings-content select,
+.settings-content textarea,
+.message-variants,
+.message-variant-list--scroll,
+.backup-list,
+.backup-list > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.message-variant-list--scroll {
+  max-height: 680px;
+}
+
+/* This breakpoint follows the physical app window. App zoom never changes media-query width. */
+@media (max-width: 1250px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .backup-list > div {
+    grid-template-columns: 130px minmax(0, 1fr) auto;
+  }
+}
+
+/* Inbox is one ordinary page inside the shared scale layer. At high zoom it scrolls instead of shrinking. */
+.page--inbox {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.page--inbox .page-header {
+  min-width: min(720px, 100%);
+}
+
+.page--inbox .inbox-layout {
+  height: calc(100vh - 155px);
+  min-width: 0;
+  min-inline-size: 720px;
+  min-height: 0;
+  grid-template-columns: minmax(250px, 34%) minmax(0, 1fr);
+}
+
+.page--inbox .conversation-list,
+.page--inbox .chat-panel,
+.page--inbox .messages-stage,
+.page--inbox .messages-scroll,
+.page--inbox .dialog-scroll {
+  min-width: 0;
+  min-height: 0;
+}
+
+.page--inbox .conversation-list,
+.page--inbox .chat-panel {
+  overflow: hidden;
+}
+
+.page--inbox .dialog-scroll,
+.page--inbox .messages-scroll {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.chat-head,
+.chat-peer,
+.chat-head-actions {
+  min-width: 0;
+}
+
+.chat-head-actions {
+  flex: 0 0 auto;
+}
+
+/* Compact messenger composer: one line initially, grows through JS up to six lines. */
+.composer {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: end;
+}
+
+.composer textarea.composer-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px !important;
+  max-height: 132px;
+  height: 32px;
+  padding: 6px 10px !important;
+  line-height: 20px;
+  resize: none;
+  overflow-y: hidden;
+  align-self: end;
+}
+
+.composer-control-stack {
+  align-self: end;
+  min-width: 92px;
+  width: 92px;
+}
+
+/* Native audio controls must never disappear behind bubble overflow. */
+.voice-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible !important;
+}
+
+.voice-card audio.voice-player {
+  display: block;
+  width: min(320px, 100%);
+  min-width: 180px;
+  max-width: 100%;
+  margin-top: 6px;
+  overflow: visible;
+}
+
+.bubble--voice {
+  overflow: visible;
+  min-width: min(210px, 100%);
+}
+
+.message-photo {
+  max-width: min(360px, 100%);
+}
+
+/* Explicit, immediate visual account reordering. */
+.account-head {
+  min-width: 0;
+  gap: 8px;
+}
+
+.account-drag-handle {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #71829e;
+  cursor: grab;
+  touch-action: none;
+}
+
+.account-drag-handle:hover,
+.account-drag-handle:focus-visible {
+  color: #b8c9e4;
+  border-color: rgba(91, 143, 243, .28);
+  background: rgba(91, 143, 243, .08);
+  outline: none;
+}
+
+.account-drag-handle:active {
+  cursor: grabbing;
+}
+
+.account-card--dragging {
+  opacity: .58;
+}
+
+.account-card--drag-over {
+  border-color: rgba(91, 143, 243, .78) !important;
+  box-shadow: inset 0 0 0 1px rgba(91, 143, 243, .42), 0 12px 34px rgba(0, 0, 0, .24);
+}
+
+.account-menu {
+  max-width: 260px;
+}
+
+/* Inbox account groups use a dedicated drag handle; dialog cards stay untouched. */
+.dialog-account-head {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.dialog-account-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dialog-account-drag-handle {
+  flex: 0 0 auto;
+  cursor: grab;
+}
+
+.dialog-account-drag-handle:active {
+  cursor: grabbing;
+}
+
+.dialog-group--drag-over > .dialog-account-head {
+  box-shadow: inset 0 0 0 1px rgba(91, 143, 243, .6);
+}

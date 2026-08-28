@@ -5,24 +5,60 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '../api/client'
+import { useSessionUiStore } from '../components/SessionUiStore'
 import { Button, Card, EmptyState, PageHeader, Status } from '../components/ui'
 import type { WorkItem } from '../types'
 
 const stateLabel: Record<string, string> = { waiting: 'Ожидает', assigned: 'Назначена', processing: 'Обрабатывается', retry_wait: 'Ожидает повтор', reconcile_required: 'Нужна проверка', paused: 'Приостановлена' }
 type ImportMode = 'append' | 'replace_waiting'
 interface ImportResult { found: number; added: number; duplicates: number; unresolved: string[]; replaced?: number; cancelled?: boolean }
+interface GroupsSessionUi {
+  selectedIds: number[]
+  search: string
+  status: string
+  sort: 'group_name' | 'account' | 'state'
+}
+
+const GROUPS_SESSION_KEY = 'groups'
 
 export default function GroupsPage() {
   const client = useQueryClient()
+  const uiStore = useSessionUiStore()
   const [params] = useSearchParams()
+  const remembered = uiStore.read<GroupsSessionUi>(GROUPS_SESSION_KEY)
+  const explicitSearch = params.get('q')
   const [text, setText] = useState('')
   const [confirmReplace, setConfirmReplace] = useState(false)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [search, setSearch] = useState(params.get('q') || '')
-  const [status, setStatus] = useState('all')
-  const [sort, setSort] = useState<'group_name' | 'account' | 'state'>('group_name')
-  useEffect(() => setSearch(params.get('q') || ''), [params])
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(remembered?.selectedIds || []))
+  const [search, setSearch] = useState(explicitSearch ?? remembered?.search ?? '')
+  const [status, setStatus] = useState(remembered?.status || 'all')
+  const [sort, setSort] = useState<'group_name' | 'account' | 'state'>(remembered?.sort || 'group_name')
+
+  useEffect(() => {
+    if (params.has('q')) setSearch(params.get('q') || '')
+  }, [params])
+
   const groups = useQuery({ queryKey: ['groups'], queryFn: () => api<{ total: number; items: WorkItem[] }>('/groups'), refetchInterval: 3000 })
+
+  useEffect(() => {
+    if (!groups.data) return
+    const existing = new Set(groups.data.items.map(item => item.id))
+    setSelected(previous => {
+      const next = new Set([...previous].filter(id => existing.has(id)))
+      if (next.size === previous.size && [...next].every(id => previous.has(id))) return previous
+      return next
+    })
+  }, [groups.data])
+
+  useEffect(() => {
+    uiStore.write<GroupsSessionUi>(GROUPS_SESSION_KEY, {
+      selectedIds: [...selected],
+      search,
+      status,
+      sort,
+    })
+  }, [uiStore, selected, search, status, sort])
+
   const importMutation = useMutation({
     mutationFn: (mode: ImportMode) => api<ImportResult>('/groups/import', { method: 'POST', body: JSON.stringify({ text, mode }) }),
     onSuccess: result => {

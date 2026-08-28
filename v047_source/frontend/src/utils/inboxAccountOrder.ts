@@ -1,0 +1,35 @@
+export const INBOX_ACCOUNT_ORDER_STORAGE_KEY = 'vk-search.inbox.account-order.v1'
+
+export function normalizeInboxAccountOrder(saved: unknown, currentAccountIds: number[]): number[] {
+  const current = currentAccountIds.filter((id, index, rows) => Number.isInteger(id) && rows.indexOf(id) === index)
+  const currentSet = new Set(current)
+  const result: number[] = []
+
+  if (Array.isArray(saved)) {
+    for (const value of saved) {
+      if (!Number.isInteger(value)) continue
+      const id = Number(value)
+      if (!currentSet.has(id) || result.includes(id)) continue
+      result.push(id)
+    }
+  }
+
+  for (const id of current) {
+    if (!result.includes(id)) result.push(id)
+  }
+
+  return result
+}
+
+export function moveInboxAccountOrder(order: number[], sourceId: number, targetId: number): number[] {
+  const next = [...order]
+  if (sourceId === targetId) return next
+
+  const sourceIndex = next.indexOf(sourceId)
+  const targetIndex = next.indexOf(targetId)
+  if (sourceIndex < 0 || targetIndex < 0) return next
+
+  next.splice(sourceIndex, 1)
+  next.splice(targetIndex, 0, sourceId)
+  return next
+}

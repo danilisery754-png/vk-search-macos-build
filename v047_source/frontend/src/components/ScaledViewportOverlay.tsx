@@ -1,0 +1,63 @@
+import { useCallback, useLayoutEffect, useState, type CSSProperties, type PropsWithChildren } from 'react'
+import { createPortal } from 'react-dom'
+import { viewportToLogical } from '../utils/uiScale'
+import { useUiScale } from './UiScaleContext'
+
+interface ViewportSurface {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+interface ScaledViewportOverlayProps extends PropsWithChildren {
+  className?: string
+}
+
+export default function ScaledViewportOverlay({ className, children }: ScaledViewportOverlayProps) {
+  const scale = useUiScale()
+  const [surface, setSurface] = useState<ViewportSurface | null>(null)
+
+  const measure = useCallback(() => {
+    const root = document.getElementById('app-overlay-root')
+    if (!root) return
+    const rect = root.getBoundingClientRect()
+    setSurface({
+      left: viewportToLogical(-rect.left, scale),
+      top: viewportToLogical(-rect.top, scale),
+      width: viewportToLogical(window.innerWidth, scale),
+      height: viewportToLogical(window.innerHeight, scale),
+    })
+  }, [scale])
+
+  useLayoutEffect(() => {
+    measure()
+    const refresh = () => measure()
+    window.addEventListener('resize', refresh)
+    window.addEventListener('scroll', refresh, true)
+    return () => {
+      window.removeEventListener('resize', refresh)
+      window.removeEventListener('scroll', refresh, true)
+    }
+  }, [measure])
+
+  const root = document.getElementById('app-overlay-root')
+  if (!root) return null
+
+  const style = {
+    position: 'absolute',
+    left: surface?.left ?? 0,
+    top: surface?.top ?? 0,
+    width: surface?.width ?? 0,
+    height: surface?.height ?? 0,
+    visibility: surface ? 'visible' : 'hidden',
+    pointerEvents: 'auto',
+  } as CSSProperties
+
+  return createPortal(
+    <div className={`scaled-viewport-overlay${className ? ` ${className}` : ''}`} style={style}>
+      {children}
+    </div>,
+    root,
+  )
+}

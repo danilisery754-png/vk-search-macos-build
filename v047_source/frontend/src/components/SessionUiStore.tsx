@@ -1,0 +1,35 @@
+import { createContext, useContext, useMemo, useRef, type PropsWithChildren } from 'react'
+
+export interface SessionUiStore {
+  read<T>(key: string): T | undefined
+  write<T>(key: string, value: T): void
+  remove(key: string): void
+}
+
+const SessionUiStoreContext = createContext<SessionUiStore | null>(null)
+const NOOP_SESSION_UI_STORE: SessionUiStore = {
+  read: () => undefined,
+  write: () => undefined,
+  remove: () => undefined,
+}
+
+export function SessionUiStoreProvider({ children }: PropsWithChildren) {
+  const valuesRef = useRef(new Map<string, unknown>())
+  const store = useMemo<SessionUiStore>(() => ({
+    read<T>(key: string) {
+      return valuesRef.current.get(key) as T | undefined
+    },
+    write<T>(key: string, value: T) {
+      valuesRef.current.set(key, value)
+    },
+    remove(key: string) {
+      valuesRef.current.delete(key)
+    },
+  }), [])
+
+  return <SessionUiStoreContext.Provider value={store}>{children}</SessionUiStoreContext.Provider>
+}
+
+export function useSessionUiStore(): SessionUiStore {
+  return useContext(SessionUiStoreContext) || NOOP_SESSION_UI_STORE
+}
