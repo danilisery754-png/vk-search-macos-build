@@ -1,0 +1,82 @@
+--- a/v047_source/frontend/src/hooks/useResultRunSelection.ts
++++ b/v047_source/frontend/src/hooks/useResultRunSelection.ts
+@@ -1,50 +1,51 @@
+ import { useEffect, useMemo, useState } from 'react'
++import { useSessionUiStore } from '../components/SessionUiStore'
+ 
+-const STORAGE_KEY = 'vk-outreach:selected-run'
++interface RunSelectionSnapshot {
++  selectedRunId?: number | null
++  [key: string]: unknown
++}
+ 
+-function readStoredRun(): number | null {
+-  try {
+-    const raw = sessionStorage.getItem(STORAGE_KEY)
+-    if (!raw) return null
+-    const value = Number(raw)
+-    return Number.isInteger(value) && value > 0 ? value : null
+-  } catch {
+-    return null
+-  }
++function normalizeRememberedRun(value: unknown): number | null {
++  const parsed = Number(value)
++  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+ }
+ 
+-export function useResultRunSelection(currentRunId: number | null, availableRunIds: number[] = [], ready = true) {
+-  const [selectedRunId, setSelectedRunId] = useState<number | null>(() => readStoredRun())
++export function useResultRunSelection(
++  currentRunId: number | null,
++  availableRunIds: number[] = [],
++  ready = true,
++  sessionKey = 'results',
++) {
++  const uiStore = useSessionUiStore()
++  const [selectedRunId, setSelectedRunId] = useState<number | null>(() => normalizeRememberedRun(uiStore.read<RunSelectionSnapshot>(sessionKey)?.selectedRunId))
+   const validIds = useMemo(() => new Set(availableRunIds), [availableRunIds])
+   const validKey = availableRunIds.join(',')
+ 
++  function persist(value: number | null) {
++    setSelectedRunId(value)
++    const previous = uiStore.read<RunSelectionSnapshot>(sessionKey) || {}
++    uiStore.write<RunSelectionSnapshot>(sessionKey, { ...previous, selectedRunId: value })
++  }
++
+   useEffect(() => {
+     if (!ready) return
+     if (currentRunId == null) {
+-      if (!availableRunIds.length) setSelectedRunId(null)
++      if (!availableRunIds.length && selectedRunId !== null) persist(null)
+       return
+     }
+-    setSelectedRunId(previous => {
+-      if (previous != null && (!availableRunIds.length || validIds.has(previous))) return previous
+-      try { sessionStorage.setItem(STORAGE_KEY, String(currentRunId)) } catch { /* storage unavailable */ }
+-      return currentRunId
+-    })
+-    // validKey provides a stable dependency for the ID set contents.
++    if (selectedRunId != null && (!availableRunIds.length || validIds.has(selectedRunId))) return
++    persist(currentRunId)
++    // validKey tracks set contents while uiStore/sessionKey are stable for a mounted page.
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [currentRunId, ready, validKey])
++  }, [currentRunId, ready, validKey, sessionKey])
+ 
+   function selectRun(id: number) {
+-    setSelectedRunId(id)
+-    try { sessionStorage.setItem(STORAGE_KEY, String(id)) } catch { /* storage unavailable */ }
++    persist(id)
+   }
+ 
+   function returnToCurrent() {
+-    if (currentRunId == null) {
+-      setSelectedRunId(null)
+-      try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* storage unavailable */ }
+-      return
+-    }
+-    selectRun(currentRunId)
++    persist(currentRunId)
+   }
+ 
+   return { selectedRunId, selectRun, returnToCurrent }
