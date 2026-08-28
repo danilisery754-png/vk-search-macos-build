@@ -1,0 +1,43 @@
+name: Apply VK Search v0.4.11 Inbox polish
+
+on:
+  push:
+    branches:
+      - vk-search-v0411-inbox-polish
+    paths:
+      - '.github/v0411/apply_source.py'
+      - '.github/workflows/apply-v0411-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vk-search-v0411-source-apply
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: vk-search-v0411-inbox-polish
+          fetch-depth: 0
+      - name: Apply deterministic source edits
+        run: python .github/v0411/apply_source.py
+      - name: Verify only approved production files changed
+        run: |
+          set -euxo pipefail
+          git diff --check
+          git diff --name-only
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "v047_source/frontend/src/hooks/useAutoGrowTextarea.ts v047_source/frontend/src/pages/InboxPage.tsx v047_source/frontend/src/styles/v0410.css "
+      - name: Commit v0.4.11 Inbox source
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add v047_source/frontend/src/hooks/useAutoGrowTextarea.ts v047_source/frontend/src/pages/InboxPage.tsx v047_source/frontend/src/styles/v0410.css
+          git commit -m 'fix: polish Inbox composer and account groups for 0.4.11'
+          git push origin HEAD:vk-search-v0411-inbox-polish
