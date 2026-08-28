@@ -118,17 +118,19 @@ describe('InboxPage v0.4.11 polish', () => {
     vi.stubGlobal('fetch', stubApi())
     renderPage()
 
-    const toggle = await screen.findByRole('button', { name: /Основной аккаунт/ })
-    const group = toggle.closest('.dialog-group') as HTMLElement
+    await screen.findByRole('button', { name: 'Перетащить аккаунт Основной аккаунт' })
+    const toggle = document.querySelector<HTMLButtonElement>('.dialog-account-toggle')
+    expect(toggle).not.toBeNull()
+    expect(toggle).toHaveTextContent('Основной аккаунт')
+    const group = toggle!.closest('.dialog-group') as HTMLElement
     expect(group).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Перетащить аккаунт Основной аккаунт' })).toBeInTheDocument()
     expect(within(group).getByRole('button', { name: /Тестовый диалог/ })).toBeInTheDocument()
 
-    fireEvent.click(toggle)
+    fireEvent.click(toggle!)
     await waitFor(() => expect(group).toHaveClass('dialog-group--collapsed'))
     expect(within(group).queryByRole('button', { name: /Тестовый диалог/ })).not.toBeInTheDocument()
 
-    fireEvent.click(toggle)
+    fireEvent.click(toggle!)
     await waitFor(() => expect(group).not.toHaveClass('dialog-group--collapsed'))
     expect(within(group).getByRole('button', { name: /Тестовый диалог/ })).toBeInTheDocument()
   })
