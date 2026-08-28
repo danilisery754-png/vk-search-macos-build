@@ -1,0 +1,21 @@
+--- a/v047_source/frontend/src/components/MessageBubble.tsx
++++ b/v047_source/frontend/src/components/MessageBubble.tsx
+@@ -29,7 +29,7 @@ function Attachment({ attachment }: { attachment: MessageAttachment }) {
+   if (attachment.type === 'audio_message') {
+     const src = firstUrl(payload)
+     const duration = payload && typeof payload.duration === 'number' ? payload.duration : null
+-    return <div className="voice-card"><strong>🎙 Голосовое{duration != null ? ` · ${duration} сек` : ''}</strong>{src ? <audio controls preload="none" src={src} /> : <span>Аудиофайл недоступен</span>}</div>
++    return <div className="voice-card"><strong>🎙 Голосовое{duration != null ? ` · ${duration} сек` : ''}</strong>{src ? <audio className="voice-player" controls preload="none" src={src} /> : <span>Аудиофайл недоступен</span>}</div>
+   }
+   if (attachment.type === 'photo') {
+     const src = firstUrl(payload)
+@@ -48,7 +48,8 @@ function Nested({ value, title }: { value: NestedMessage; title: string }) {
+ export default function MessageBubble({ message, onContextMenu, onReplyJump }: { message: MessageItem; onContextMenu: (event: React.MouseEvent, message: MessageItem) => void; onReplyJump?: (id: number) => void }) {
+   if (message.deleted) return <div id={`message-${message.vk_message_id}`} className={`bubble bubble--deleted ${message.outgoing ? 'bubble--out' : ''}`} onContextMenu={event => onContextMenu(event, message)}><p>Сообщение удалено</p></div>
+   const replyId = message.reply_message?.id
+-  return <div id={`message-${message.vk_message_id}`} className={`bubble ${message.outgoing ? 'bubble--out' : ''}`} onContextMenu={event => onContextMenu(event, message)}>
++  const hasVoice = Boolean(message.attachments?.some(attachment => attachment.type === 'audio_message'))
++  return <div id={`message-${message.vk_message_id}`} className={`bubble ${hasVoice ? 'bubble--voice' : ''} ${message.outgoing ? 'bubble--out' : ''}`} onContextMenu={event => onContextMenu(event, message)}>
+     {message.reply_message?.id && <button type="button" className="reply-preview" onClick={() => replyId && onReplyJump?.(replyId)}><Nested value={message.reply_message} title="Ответ на сообщение" /></button>}
+     {message.forwarded_messages?.map((value, index) => <Nested key={index} value={value} title="Пересланное сообщение" />)}
+     {message.body && <p>{message.body}</p>}
