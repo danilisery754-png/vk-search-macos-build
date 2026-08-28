@@ -1,0 +1,22 @@
+--- /dev/null
++++ b/v047_source/frontend/src/components/SessionScrollMain.tsx
+@@ -0,0 +1,19 @@
++import { useLayoutEffect, useRef, type PropsWithChildren } from 'react'
++import { useLocation } from 'react-router-dom'
++import { useSessionUiStore } from './SessionUiStore'
++
++export default function SessionScrollMain({ children }: PropsWithChildren) {
++  const location = useLocation()
++  const uiStore = useSessionUiStore()
++  const mainRef = useRef<HTMLElement>(null)
++  const scrollKey = `route-scroll:${location.pathname}`
++
++  useLayoutEffect(() => {
++    const element = mainRef.current
++    if (!element) return
++    const remembered = Number(uiStore.read<number>(scrollKey) ?? 0)
++    element.scrollTop = Number.isFinite(remembered) && remembered >= 0 ? remembered : 0
++  }, [scrollKey, uiStore])
++
++  return <main ref={mainRef} onScroll={event => uiStore.write(scrollKey, event.currentTarget.scrollTop)}>{children}</main>
++}
