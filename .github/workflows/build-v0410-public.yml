@@ -38,53 +38,57 @@ jobs:
           grep -q '45d96c6f2931bbeb346e82a1e136ea5c624002ff' SOURCE_PROVENANCE.md
           test "$(find .github/v0410-source-patches -type f -name '*.patch' | wc -l | tr -d ' ')" = '29'
           test "$(git hash-object .github/v0410-source-files/v0410.css)" = '0c2dd38494ce3ec1c0456d00be1803edd17f152d'
+          test "$(git hash-object v047_source/frontend/src/App.tsx)" = '0f2bf0fceb96fdad52cff548ac5096a001b1eac7'
           sw_vers
 
       - name: Materialize exact repaired v0.4.10 production source
         run: |
           set -euxo pipefail
-          apply_hunk() {
+          apply_transfer() {
             local patch_file="$1"
             local target_file="$2"
             mkdir -p "$(dirname "$target_file")"
-            if [[ ! -e "$target_file" ]]; then
-              : > "$target_file"
-            fi
             echo "Applying $(basename "$patch_file") -> $target_file"
-            patch --batch --forward "$target_file" < "$patch_file"
+            if [[ -e "$target_file" ]]; then
+              patch --batch --forward "$target_file" < "$patch_file"
+            else
+              git apply --check "$patch_file"
+              git apply "$patch_file"
+            fi
           }
 
-          apply_hunk .github/v0410-source-patches/001-routes.patch v047_source/backend/app/api/routes.py
-          apply_hunk .github/v0410-source-patches/002-main.patch v047_source/backend/app/main.py
-          apply_hunk .github/v0410-source-patches/003-pyproject.patch v047_source/backend/pyproject.toml
-          apply_hunk .github/v0410-source-patches/004-build-macos.patch v047_source/build/BUILD_MACOS.sh
-          apply_hunk .github/v0410-source-patches/005-spec.patch v047_source/build/VKOutreachManagerMac.spec
-          apply_hunk .github/v0410-source-patches/006-package-json.patch v047_source/frontend/package.json
-          apply_hunk .github/v0410-source-patches/007-app.patch v047_source/frontend/src/App.tsx
-          apply_hunk .github/v0410-source-patches/008-inbox-scroll-memory.patch v047_source/frontend/src/components/InboxScrollMemory.tsx
-          apply_hunk .github/v0410-source-patches/009-message-bubble.patch v047_source/frontend/src/components/MessageBubble.tsx
-          apply_hunk .github/v0410-source-patches/010-run-selector.patch v047_source/frontend/src/components/RunSelector.tsx
-          apply_hunk .github/v0410-source-patches/011-scaled-overlay.patch v047_source/frontend/src/components/ScaledOverlay.tsx
-          apply_hunk .github/v0410-source-patches/012-scaled-viewport-overlay.patch v047_source/frontend/src/components/ScaledViewportOverlay.tsx
-          apply_hunk .github/v0410-source-patches/013-session-scroll-main.patch v047_source/frontend/src/components/SessionScrollMain.tsx
-          apply_hunk .github/v0410-source-patches/014-session-ui-store.patch v047_source/frontend/src/components/SessionUiStore.tsx
-          apply_hunk .github/v0410-source-patches/015-session-viewport-scroll.patch v047_source/frontend/src/components/SessionViewportScroll.tsx
-          apply_hunk .github/v0410-source-patches/016-shell.patch v047_source/frontend/src/components/Shell.tsx
-          apply_hunk .github/v0410-source-patches/017-ui-scale-context.patch v047_source/frontend/src/components/UiScaleContext.tsx
-          apply_hunk .github/v0410-source-patches/018-auto-grow.patch v047_source/frontend/src/hooks/useAutoGrowTextarea.ts
-          apply_hunk .github/v0410-source-patches/019-result-run-selection.patch v047_source/frontend/src/hooks/useResultRunSelection.ts
-          apply_hunk .github/v0410-source-patches/020-main-tsx.patch v047_source/frontend/src/main.tsx
-          apply_hunk .github/v0410-source-patches/021-accounts-page.patch v047_source/frontend/src/pages/AccountsPage.tsx
-          apply_hunk .github/v0410-source-patches/022-groups-page.patch v047_source/frontend/src/pages/GroupsPage.tsx
-          apply_hunk .github/v0410-source-patches/023-inbox-page.patch v047_source/frontend/src/pages/InboxPage.tsx
-          apply_hunk .github/v0410-source-patches/024-logs-page.patch v047_source/frontend/src/pages/LogsPage.tsx
-          apply_hunk .github/v0410-source-patches/025-results-page.patch v047_source/frontend/src/pages/ResultsPage.tsx
-          apply_hunk .github/v0410-source-patches/026-settings-page.patch v047_source/frontend/src/pages/SettingsPage.tsx
+          apply_transfer .github/v0410-source-patches/001-routes.patch v047_source/backend/app/api/routes.py
+          apply_transfer .github/v0410-source-patches/002-main.patch v047_source/backend/app/main.py
+          apply_transfer .github/v0410-source-patches/003-pyproject.patch v047_source/backend/pyproject.toml
+          apply_transfer .github/v0410-source-patches/004-build-macos.patch v047_source/build/BUILD_MACOS.sh
+          apply_transfer .github/v0410-source-patches/005-spec.patch v047_source/build/VKOutreachManagerMac.spec
+          apply_transfer .github/v0410-source-patches/006-package-json.patch v047_source/frontend/package.json
+          apply_transfer .github/v0410-source-patches/007-app.patch v047_source/frontend/src/App.tsx
+          apply_transfer .github/v0410-source-patches/008-inbox-scroll-memory.patch v047_source/frontend/src/components/InboxScrollMemory.tsx
+          apply_transfer .github/v0410-source-patches/009-message-bubble.patch v047_source/frontend/src/components/MessageBubble.tsx
+          apply_transfer .github/v0410-source-patches/010-run-selector.patch v047_source/frontend/src/components/RunSelector.tsx
+          apply_transfer .github/v0410-source-patches/011-scaled-overlay.patch v047_source/frontend/src/components/ScaledOverlay.tsx
+          apply_transfer .github/v0410-source-patches/012-scaled-viewport-overlay.patch v047_source/frontend/src/components/ScaledViewportOverlay.tsx
+          apply_transfer .github/v0410-source-patches/013-session-scroll-main.patch v047_source/frontend/src/components/SessionScrollMain.tsx
+          apply_transfer .github/v0410-source-patches/014-session-ui-store.patch v047_source/frontend/src/components/SessionUiStore.tsx
+          apply_transfer .github/v0410-source-patches/015-session-viewport-scroll.patch v047_source/frontend/src/components/SessionViewportScroll.tsx
+          apply_transfer .github/v0410-source-patches/016-shell.patch v047_source/frontend/src/components/Shell.tsx
+          apply_transfer .github/v0410-source-patches/017-ui-scale-context.patch v047_source/frontend/src/components/UiScaleContext.tsx
+          apply_transfer .github/v0410-source-patches/018-auto-grow.patch v047_source/frontend/src/hooks/useAutoGrowTextarea.ts
+          apply_transfer .github/v0410-source-patches/019-result-run-selection.patch v047_source/frontend/src/hooks/useResultRunSelection.ts
+          apply_transfer .github/v0410-source-patches/020-main-tsx.patch v047_source/frontend/src/main.tsx
+          apply_transfer .github/v0410-source-patches/021-accounts-page.patch v047_source/frontend/src/pages/AccountsPage.tsx
+          apply_transfer .github/v0410-source-patches/022-groups-page.patch v047_source/frontend/src/pages/GroupsPage.tsx
+          apply_transfer .github/v0410-source-patches/023-inbox-page.patch v047_source/frontend/src/pages/InboxPage.tsx
+          apply_transfer .github/v0410-source-patches/024-logs-page.patch v047_source/frontend/src/pages/LogsPage.tsx
+          apply_transfer .github/v0410-source-patches/025-results-page.patch v047_source/frontend/src/pages/ResultsPage.tsx
+          apply_transfer .github/v0410-source-patches/026-settings-page.patch v047_source/frontend/src/pages/SettingsPage.tsx
           cp .github/v0410-source-files/v0410.css v047_source/frontend/src/styles/v0410.css
-          apply_hunk .github/v0410-source-patches/028-inbox-account-order.patch v047_source/frontend/src/utils/inboxAccountOrder.ts
-          apply_hunk .github/v0410-source-patches/029-ui-scale.patch v047_source/frontend/src/utils/uiScale.ts
+          apply_transfer .github/v0410-source-patches/028-inbox-account-order.patch v047_source/frontend/src/utils/inboxAccountOrder.ts
+          apply_transfer .github/v0410-source-patches/029-ui-scale.patch v047_source/frontend/src/utils/uiScale.ts
 
           test "$(git hash-object v047_source/frontend/src/styles/v0410.css)" = '0c2dd38494ce3ec1c0456d00be1803edd17f152d'
+          test "$(git hash-object v047_source/frontend/src/App.tsx)" = '0f2bf0fceb96fdad52cff548ac5096a001b1eac7'
           git diff --check
           grep -q 'version = "0.4.10"' v047_source/backend/pyproject.toml
           grep -q 'title="VK Search", version="0.4.10"' v047_source/backend/app/main.py
