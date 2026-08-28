@@ -1,0 +1,224 @@
+name: Verify Build and Release VK Search v0.4.10 macOS ARM64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v0410-final-source]
+    paths:
+      - '.github/workflows/build-v0410-macos-arm64.yml'
+      - 'transfer/v0410/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vk-search-v0410-github-hosted-release
+  cancel-in-progress: true
+
+jobs:
+  verify-build-release:
+    runs-on: macos-14
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout frozen v0.4.9 public source plus v0.4.10 patchset
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify native Apple Silicon runner
+        run: |
+          test "$(uname -s)" = 'Darwin'
+          test "$(uname -m)" = 'arm64'
+          sw_vers
+
+      - name: Apply exact v0.4.10 repair patchset
+        run: |
+          set -euo pipefail
+          count=$(find transfer/v0410 -maxdepth 1 -name '*.patch' | wc -l | tr -d ' ')
+          test "$count" = '29'
+          for patch in $(find transfer/v0410 -maxdepth 1 -name '*.patch' | sort); do
+            echo "Applying $patch"
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+          git diff --check
+          test -f v047_source/frontend/src/utils/uiScale.ts
+          test -f v047_source/frontend/src/utils/inboxAccountOrder.ts
+          test -f v047_source/frontend/src/styles/v0410.css
+
+      - name: Guard frozen sender and desktop production core
+        run: |
+          set -euo pipefail
+          if git diff --name-only HEAD -- \
+            v047_source/backend/app/services/processor.py \
+            v047_source/backend/app/services/queue.py \
+            v047_source/backend/app/services/runs.py \
+            v047_source/backend/app/services/outcomes.py \
+            v047_source/backend/app/services/retry.py \
+            v047_source/backend/app/services/quota.py \
+            v047_source/backend/app/services/distribution.py \
+            v047_source/backend/app/services/worklist.py \
+            v047_source/backend/app/workers/supervisor.py \
+            v047_source/backend/app/vk/client.py \
+            v047_source/desktop | grep -q .; then
+            echo 'Frozen sender/desktop production files changed:'
+            git diff --name-only HEAD -- v047_source/backend/app/services v047_source/backend/app/workers v047_source/backend/app/vk v047_source/desktop
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: v047_source/backend/pyproject.toml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: v047_source/frontend/package-lock.json
+
+      - name: Restore application image assets
+        working-directory: v047_source
+        run: |
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          source = Path('build/vk-search-icon.jpg.b64')
+          raw = base64.b64decode(source.read_text(encoding='utf-8').strip(), validate=True)
+          if len(raw) < 10_000 or not raw.startswith(b'\xff\xd8'):
+              raise SystemExit('VK Search icon source is invalid')
+          for name in ('build/vk-search-icon.jpg', 'frontend/public/vk-search-icon.jpg'):
+              target = Path(name)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(raw)
+          PY
+          sips -s format png -z 1024 1024 build/vk-search-icon.jpg --out build/app-icon.png >/dev/null
+          test -s frontend/public/vk-search-icon.jpg
+          test -s build/app-icon.png
+
+      - name: Install backend verification dependencies
+        working-directory: v047_source
+        run: |
+          rm -rf .ci-venv
+          python -m venv .ci-venv
+          .ci-venv/bin/python -m pip install --upgrade pip
+          .ci-venv/bin/python -m pip install -e './backend[dev,desktop]'
+          .ci-venv/bin/python -m pip check
+
+      - name: Verify v0.4.10 metadata and repair contracts
+        working-directory: v047_source
+        run: |
+          grep -q 'version = "0.4.10"' backend/pyproject.toml
+          grep -q 'title="VK Search", version="0.4.10"' backend/app/main.py
+          grep -q '"version": "0.4.10"' backend/app/api/routes.py
+          grep -q '"version": "0.4.10"' frontend/package.json
+          grep -q 'version="0.4.10"' build/VKOutreachManagerMac.spec
+          grep -q 'VK_Search_0.4.10_macOS_arm64.dmg' build/BUILD_MACOS.sh
+          grep -q "import './styles/v0410.css'" frontend/src/main.tsx
+          grep -q 'SessionUiStoreProvider' frontend/src/main.tsx
+          grep -q 'SessionViewportScroll' frontend/src/components/Shell.tsx
+          grep -q 'fullAppScaleStyle' frontend/src/components/Shell.tsx
+          grep -q 'ScaledViewportOverlay' frontend/src/pages/InboxPage.tsx
+          grep -q 'INBOX_ACCOUNT_ORDER_STORAGE_KEY' frontend/src/pages/InboxPage.tsx
+          grep -q 'replyTargetIdsByDialogId' frontend/src/pages/InboxPage.tsx
+          grep -q 'page--settings' frontend/src/pages/SettingsPage.tsx
+          grep -q 'scrollTopBySection' frontend/src/pages/SettingsPage.tsx
+          grep -q 'overflow: auto' frontend/src/styles/v0410.css
+          ! grep -q -- '--logical-viewport-' frontend/src/styles/v0410.css
+          ! grep -q 'container-name: settings-' frontend/src/styles/v0410.css
+
+      - name: Stable backend regression suite
+        working-directory: v047_source
+        run: |
+          .ci-venv/bin/python -m pytest \
+            backend/tests/test_v049_behavior.py \
+            backend/tests/test_v049_unread_semantics.py \
+            backend/tests/test_v049_static_assets.py \
+            backend/tests/test_v049_preview_upgrade.py \
+            backend/tests/test_v049_archive_sync.py \
+            backend/tests/test_v049_routes.py \
+            backend/tests/test_v049_migration_upgrade.py \
+            backend/tests/test_v049_deleted_preview_runtime.py \
+            backend/tests/test_v048_behavior.py \
+            backend/tests/test_v047_critical_behavior.py \
+            backend/tests/test_v047_product_contract.py \
+            -q
+          .ci-venv/bin/python -m compileall -q backend/app desktop
+
+      - name: Normalize lockfile package version in runner workspace
+        working-directory: v047_source/frontend
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'package-lock.json'
+          const lock = JSON.parse(fs.readFileSync(path, 'utf8'))
+          lock.version = '0.4.10'
+          lock.packages[''].version = '0.4.10'
+          fs.writeFileSync(path, JSON.stringify(lock, null, 2) + '\n')
+          NODE
+
+      - name: Frontend typecheck and production build
+        working-directory: v047_source/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+          test -s dist/index.html
+          test -s dist/vk-search-icon.jpg
+          ! grep -q '/src/main.tsx' dist/index.html
+          ! grep -R -E 'fonts\.googleapis\.com|fonts\.gstatic\.com' dist
+
+      - name: Build and self-test macOS application
+        working-directory: v047_source
+        env:
+          PYTHON_BIN: ${{ github.workspace }}/v047_source/.ci-venv/bin/python
+        run: bash build/BUILD_MACOS.sh
+
+      - name: Verify ARM64 application and DMG
+        working-directory: v047_source
+        run: |
+          APP='build/dist-macos/VK Search.app'
+          BIN="$APP/Contents/MacOS/VK Search"
+          DMG='build/release/VK_Search_0.4.10_macOS_arm64.dmg'
+          test -d "$APP"
+          test -x "$BIN"
+          test -f "$DMG"
+          test -f "$DMG.sha256"
+          file "$BIN" | grep -q 'arm64'
+          test "$(plutil -extract CFBundleDisplayName raw "$APP/Contents/Info.plist")" = 'VK Search'
+          test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = 'com.vkoutreach.manager'
+          test "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")" = '0.4.10'
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          hdiutil verify "$DMG"
+          (cd build/release && shasum -a 256 -c VK_Search_0.4.10_macOS_arm64.dmg.sha256)
+
+      - name: Upload verified build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VK-Search-macOS-ARM64-0.4.10
+          path: |
+            v047_source/build/release/VK_Search_0.4.10_macOS_arm64.dmg
+            v047_source/build/release/VK_Search_0.4.10_macOS_arm64.dmg.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Publish GitHub release v0.4.10
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DMG='v047_source/build/release/VK_Search_0.4.10_macOS_arm64.dmg'
+          SHA='v047_source/build/release/VK_Search_0.4.10_macOS_arm64.dmg.sha256'
+          if gh release view v0.4.10 >/dev/null 2>&1; then
+            gh release upload v0.4.10 "$DMG" "$SHA" --clobber
+          else
+            gh release create v0.4.10 "$DMG" "$SHA" \
+              --target "${GITHUB_SHA}" \
+              --title 'VK Search 0.4.10' \
+              --notes 'VK Search 0.4.10 for macOS ARM64. Full-app 75–300% scaling repair, reachable controls/overlays, Inbox account ordering and dialog state memory, Settings section/scroll memory, and frozen sender/backend production core.'
+          fi
