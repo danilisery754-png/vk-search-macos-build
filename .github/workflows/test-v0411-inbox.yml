@@ -36,3 +36,5 @@ jobs:
       - name: Typecheck
         working-directory: v047_source/frontend
         run: npm run typecheck
+
+# Source is materialized before this gate; this comment intentionally retriggers the push workflow.
