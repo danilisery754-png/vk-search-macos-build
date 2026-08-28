@@ -70,16 +70,16 @@ function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
 
-function stubApi() {
+function stubApi(accountValue = account) {
   return vi.fn(async (request: RequestInfo | URL, init?: RequestInit) => {
     const url = String(request)
     const method = String(init?.method || 'GET').toUpperCase()
-    if (url.endsWith('/api/accounts')) return json([account])
+    if (url.endsWith('/api/accounts')) return json([accountValue])
     if (url.includes('/api/inbox/folders')) return json([])
     if (url.includes('/api/inbox/dialogs?')) return json([dialog])
     if (url.endsWith('/api/inbox/dialogs/10?limit=50')) return json({
       dialog,
-      reply_account: { id: 1, name: 'Иван Иванов', note: 'Основной аккаунт', avatar_url: '' },
+      reply_account: { id: 1, name: 'Иван Иванов', note: accountValue.note, avatar_url: '' },
       messages: [message],
       local_total: 1,
       next_before_vk_message_id: null,
@@ -133,6 +133,16 @@ describe('InboxPage v0.4.11 polish', () => {
     fireEvent.click(toggle!)
     await waitFor(() => expect(group).not.toHaveClass('dialog-group--collapsed'))
     expect(within(group).getByRole('button', { name: /Тестовый диалог/ })).toBeInTheDocument()
+  })
+
+  it('falls back to account display name when no note is configured', async () => {
+    vi.stubGlobal('fetch', stubApi({ ...account, note: '' }))
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Перетащить аккаунт Иван Иванов' })
+    const toggle = document.querySelector<HTMLButtonElement>('.dialog-account-toggle')
+    expect(toggle).not.toBeNull()
+    expect(toggle).toHaveTextContent('Иван Иванов')
   })
 
   it('removes the duplicate sender strip and keeps emoji, quick replies and an icon-only send action', async () => {
