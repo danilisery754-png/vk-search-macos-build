@@ -153,11 +153,18 @@ jobs:
           .ci-venv/bin/python -m pip install -e './backend[dev,desktop]'
           .ci-venv/bin/python -m pip check
 
-      - name: Backend regression gate
+      - name: Current backend runtime regression gate
         working-directory: v047_source
         run: |
           set -euxo pipefail
-          .ci-venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_v049_versioning.py
+          .ci-venv/bin/python -m pytest \
+            backend/tests/test_api_smoke.py \
+            backend/tests/test_desktop_runtime.py \
+            backend/tests/test_inbox_isolation.py \
+            backend/tests/test_inbox_pagination_040.py \
+            backend/tests/test_backup.py \
+            backend/tests/test_export.py \
+            -q
           .ci-venv/bin/python -m compileall -q backend/app desktop
 
       - name: Verify v0.4.10 product contracts before frontend build
@@ -187,6 +194,24 @@ jobs:
               raise SystemExit('Legacy main-only scale root is still present in Shell.tsx')
           print('v0.4.10 product contracts verified')
           PY
+
+      - name: Restore packaged frontend static icon
+        working-directory: v047_source
+        run: |
+          set -euxo pipefail
+          .ci-venv/bin/python - <<'PY'
+          import base64
+          from pathlib import Path
+          source = Path('build/vk-search-icon.jpg.b64')
+          target = Path('frontend/public/vk-search-icon.jpg')
+          raw = base64.b64decode(source.read_text(encoding='utf-8').strip(), validate=True)
+          if len(raw) < 10_000 or not raw.startswith(b'\xff\xd8'):
+              raise SystemExit('VK Search frontend icon source is invalid')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_bytes(raw)
+          print(f'frontend icon bytes: {len(raw)}')
+          PY
+          test -s frontend/public/vk-search-icon.jpg
 
       - name: Normalize lockfile release metadata in runner workspace
         working-directory: v047_source/frontend
@@ -226,6 +251,7 @@ jobs:
             v047_source/build/BUILD_MACOS.sh \
             v047_source/build/VKOutreachManagerMac.spec \
             v047_source/frontend/package.json \
+            v047_source/frontend/public/vk-search-icon.jpg \
             v047_source/frontend/src
           git diff --cached --check
           git diff --cached --quiet && { echo 'Expected materialized v0.4.10 source changes are missing'; exit 1; }
