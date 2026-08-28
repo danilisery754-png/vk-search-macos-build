@@ -360,7 +360,7 @@ body,
   flex: 0 0 auto;
 }
 
-/* Compact messenger composer: one line initially, grows through JS up to six lines. */
+/* Compact messenger composer: one line initially, then grows with its content without an inner scrollbar. */
 .composer {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto !important;
@@ -372,19 +372,25 @@ body,
   width: 100%;
   min-width: 0;
   min-height: 32px !important;
-  max-height: 132px;
   height: 32px;
   padding: 6px 10px !important;
   line-height: 20px;
   resize: none;
-  overflow-y: hidden;
+  overflow-y: hidden !important;
   align-self: end;
 }
 
 .composer-control-stack {
   align-self: end;
-  min-width: 92px;
-  width: 92px;
+  min-width: 40px;
+  width: 40px;
+}
+
+.composer-control-stack > .button[type='submit'] {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
 /* Native audio controls must never disappear behind bubble overflow. */
@@ -465,12 +471,18 @@ body,
 }
 
 .dialog-account-toggle {
+  width: auto !important;
   flex: 1 1 auto;
   min-width: 0;
 }
 
 .dialog-account-drag-handle {
-  flex: 0 0 auto;
+  width: 28px !important;
+  min-width: 28px;
+  flex: 0 0 28px;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
   cursor: grab;
 }
 

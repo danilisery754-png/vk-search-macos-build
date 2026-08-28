@@ -4,14 +4,8 @@ import { useUiScale } from '../components/UiScaleContext'
 export function resizeTextarea(textarea: HTMLTextAreaElement | null): void {
   if (!textarea) return
   textarea.style.height = 'auto'
-  const computed = getComputedStyle(textarea)
-  const lineHeight = parseFloat(computed.lineHeight) || 20
-  const paddingTop = parseFloat(computed.paddingTop) || 0
-  const paddingBottom = parseFloat(computed.paddingBottom) || 0
-  const maxHeight = (lineHeight * 6) + paddingTop + paddingBottom
-  const nextHeight = Math.min(textarea.scrollHeight, maxHeight)
-  textarea.style.height = `${nextHeight}px`
-  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  textarea.style.height = `${textarea.scrollHeight}px`
+  textarea.style.overflowY = 'hidden'
 }
 
 export function useAutoGrowTextarea(ref: RefObject<HTMLTextAreaElement | null>, value: string): void {
