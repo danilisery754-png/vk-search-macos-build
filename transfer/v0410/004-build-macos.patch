@@ -1,0 +1,11 @@
+--- a/v047_source/build/BUILD_MACOS.sh
++++ b/v047_source/build/BUILD_MACOS.sh
+@@ -9,7 +9,7 @@ WORK="$BUILD/work-macos"
+ APP="$DIST/VK Search.app"
+ APP_BIN="$APP/Contents/MacOS/VK Search"
+ BROWSERS="$BUILD/playwright-browsers"
+-DMG="$RELEASE/VK_Search_0.4.9_macOS_arm64.dmg"
++DMG="$RELEASE/VK_Search_0.4.10_macOS_arm64.dmg"
+ PYTHON_BIN="${PYTHON_BIN:-$ROOT/.ci-venv/bin/python}"
+ 
+ if [[ "$(uname -m)" != "arm64" ]]; then
