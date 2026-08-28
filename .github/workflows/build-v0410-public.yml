@@ -43,15 +43,14 @@ jobs:
       - name: Materialize exact repaired v0.4.10 production source
         run: |
           set -euxo pipefail
-          : > /tmp/v0410-production.patch
           for patch in .github/v0410-source-patches/*.patch; do
             if [[ "$(basename "$patch")" == '027-v0410-css.patch' ]]; then
               continue
             fi
-            cat "$patch" >> /tmp/v0410-production.patch
+            echo "Applying $(basename "$patch")"
+            git apply --check "$patch"
+            git apply "$patch"
           done
-          git apply --check /tmp/v0410-production.patch
-          git apply /tmp/v0410-production.patch
           cp .github/v0410-source-files/v0410.css v047_source/frontend/src/styles/v0410.css
           test "$(git hash-object v047_source/frontend/src/styles/v0410.css)" = '0c2dd38494ce3ec1c0456d00be1803edd17f152d'
           git diff --check
