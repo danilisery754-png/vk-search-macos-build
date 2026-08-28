@@ -1,0 +1,15 @@
+--- /dev/null
++++ b/v047_source/frontend/src/components/UiScaleContext.tsx
+@@ -0,0 +1,12 @@
++import { createContext, useContext, type PropsWithChildren } from 'react'
++import { normalizeUiScale } from '../utils/uiScale'
++
++const UiScaleContext = createContext(1)
++
++export function UiScaleProvider({ value, children }: PropsWithChildren<{ value: number }>) {
++  return <UiScaleContext.Provider value={normalizeUiScale(value)}>{children}</UiScaleContext.Provider>
++}
++
++export function useUiScale(): number {
++  return useContext(UiScaleContext)
++}
