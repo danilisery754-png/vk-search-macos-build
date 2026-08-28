@@ -1,0 +1,39 @@
+diff --git a/v047_source/frontend/src/components/RunSelector.tsx b/v047_source/frontend/src/components/RunSelector.tsx
+--- a/v047_source/frontend/src/components/RunSelector.tsx
++++ b/v047_source/frontend/src/components/RunSelector.tsx
+@@ -2,6 +2,7 @@ import { CalendarClock, Check, ChevronDown, Trash2 } from 'lucide-react'
+ import { useEffect, useRef, useState } from 'react'
+ import type { RunSummary } from '../types'
+ import { formatLocalDateTime } from '../utils/time'
++import ScaledOverlay from './ScaledOverlay'
+ 
+ const stateLabels: Record<string, string> = {
+   draft: 'Черновик', running: 'Выполняется', paused: 'Приостановлен', stopped: 'Остановлен',
+@@ -27,6 +28,7 @@ export default function RunSelector({
+ }) {
+   const [open, setOpen] = useState(false)
+   const rootRef = useRef<HTMLDivElement>(null)
++  const triggerRef = useRef<HTMLButtonElement>(null)
+   const selected = runs.find(run => run.id === selectedRunId) || null
+   const archived = selectedRunId != null && currentRunId != null && selectedRunId !== currentRunId
+ 
+@@ -43,8 +45,8 @@ export default function RunSelector({
+ 
+   return <div className="run-selector-wrap">
+     <div className="run-selector" ref={rootRef}>
+-      <button className="run-selector-trigger" type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}><CalendarClock size={15} /><span>Запуски{selected ? ` · #${selected.id}` : ''}</span><ChevronDown size={14} /></button>
+-      {open && <div className="run-selector-panel" role="menu">
++      <button ref={triggerRef} className="run-selector-trigger" type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}><CalendarClock size={15} /><span>Запуски{selected ? ` · #${selected.id}` : ''}</span><ChevronDown size={14} /></button>
++      {open && <ScaledOverlay anchor={triggerRef.current} placement="bottom-start"><div className="run-selector-panel" role="menu">
+         <div className="run-selector-title"><strong>История запусков</strong><span>Хранится бессрочно</span></div>
+         <div className="run-selector-list">
+           {runs.length ? runs.map(run => <div className={`run-selector-row ${run.id === selectedRunId ? 'active' : ''}`} key={run.id}>
+@@ -55,7 +57,7 @@ export default function RunSelector({
+             {run.id !== currentRunId && <button className="run-delete" type="button" aria-label={`Удалить запуск #${run.id}`} title="Удалить запуск" onClick={() => { if (confirm('Удалить этот запуск и его результаты?')) onDelete(run.id) }}><Trash2 size={14} /></button>}
+           </div>) : <div className="run-selector-empty">Запусков пока нет</div>}
+         </div>
+-      </div>}
++      </div></ScaledOverlay>}
+     </div>
+     {archived && selected && <div className="run-archive-banner"><span>Просмотр архива: запуск #{selected.id} · {formatDate(selected.started_at)}</span><button type="button" onClick={() => currentRunId != null && onSelect(currentRunId)}>Вернуться к текущему запуску</button></div>}
+   </div>

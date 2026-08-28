@@ -1,0 +1,370 @@
+diff --git a/v047_source/frontend/src/pages/InboxPage.tsx b/v047_source/frontend/src/pages/InboxPage.tsx
+--- a/v047_source/frontend/src/pages/InboxPage.tsx
++++ b/v047_source/frontend/src/pages/InboxPage.tsx
+@@ -1,24 +1,59 @@
+ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+-import { ChevronDown, Inbox, MessageCircle, Paperclip, Pin, Plus, RefreshCcw, Search, Send, Smile, UserRound, X, Zap } from 'lucide-react'
+-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
++import { ChevronDown, GripVertical, Inbox, MessageCircle, Paperclip, Pin, Plus, RefreshCcw, Search, Send, Smile, UserRound, X, Zap } from 'lucide-react'
++import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
++import { useLocation } from 'react-router-dom'
+ import { toast } from 'sonner'
+ import { api } from '../api/client'
+ import EmojiPicker from '../components/EmojiPicker'
+ import MessageBubble from '../components/MessageBubble'
++import ScaledOverlay from '../components/ScaledOverlay'
++import ScaledViewportOverlay from '../components/ScaledViewportOverlay'
++import { useSessionUiStore } from '../components/SessionUiStore'
+ import { Button, EmptyState, PageHeader } from '../components/ui'
++import { useAutoGrowTextarea } from '../hooks/useAutoGrowTextarea'
+ import type { Account, Dialog, DialogFolder, MessageItem, MessagePayload } from '../types'
++import { INBOX_ACCOUNT_ORDER_STORAGE_KEY, moveInboxAccountOrder, normalizeInboxAccountOrder } from '../utils/inboxAccountOrder'
+ import { formatLocalDate, formatLocalDateTime } from '../utils/time'
+ 
+ interface SyncDialogResult { ok: boolean; messages: number; fetched: number; total: number; next_offset: number; has_more: boolean; error?: string; state?: string }
+ interface SyncDialogRequest { dialogId: number; offset: number; count: number }
+ interface ReplyResult { ok: boolean; state?: string; message_id?: number | null; error?: string; account_id?: number }
+ interface QuickReply { id: string; text: string; created_at?: string; updated_at?: string }
+ interface MenuPoint<T> { value: T; x: number; y: number }
++interface InboxAccountGroup { accountId: number; accountName: string; rows: Dialog[] }
+ type InboxFilter = 'all' | 'unread' | 'archive'
++interface InboxSessionUi {
++  filter: InboxFilter
++  folderId: number | ''
++  accountId: number | ''
++  search: string
++  selectedDialogId: number | null
++  collapsedAccountIds: number[]
++  foldersCollapsed: boolean
++  folderSearch: string
++  folderOrder: number[]
++  draftsByDialogId: Record<string, string>
++  replyTargetIdsByDialogId: Record<string, number>
++}
++
++const INBOX_SESSION_KEY = 'inbox'
++
++function explicitFilter(search: string): InboxFilter | null {
++  const value = new URLSearchParams(search).get('filter')
++  return value === 'all' || value === 'unread' || value === 'archive' ? value : null
++}
++
++function readInboxAccountOrder(): number[] {
++  try {
++    const value = JSON.parse(localStorage.getItem(INBOX_ACCOUNT_ORDER_STORAGE_KEY) || '[]')
++    return Array.isArray(value) ? value.filter((id): id is number => Number.isInteger(id)) : []
++  } catch {
++    return []
++  }
++}
+ 
+-function initialFilter(): InboxFilter {
+-  const value = new URLSearchParams(window.location.search).get('filter')
+-  return value === 'unread' || value === 'archive' ? value : 'all'
++function sameNumberArray(left: number[], right: number[]): boolean {
++  return left.length === right.length && left.every((value, index) => value === right[index])
+ }
+ 
+ function lastMessagePreview(dialog: Dialog): string {
+@@ -33,13 +68,22 @@ function lastMessagePreview(dialog: Dialog): string {
+ 
+ export default function InboxPage() {
+   const client = useQueryClient()
+-  const [filter, setFilter] = useState<InboxFilter>(initialFilter)
+-  const [folderId, setFolderId] = useState<number | ''>('')
+-  const [accountId, setAccountId] = useState<number | ''>('')
+-  const [search, setSearch] = useState('')
+-  const [selected, setSelected] = useState<number | null>(null)
+-  const [reply, setReply] = useState('')
+-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
++  const uiStore = useSessionUiStore()
++  const location = useLocation()
++  const remembered = uiStore.read<InboxSessionUi>(INBOX_SESSION_KEY)
++  const requestedFilter = explicitFilter(location.search)
++  const [filter, setFilter] = useState<InboxFilter>(requestedFilter ?? remembered?.filter ?? 'all')
++  const [folderId, setFolderId] = useState<number | ''>(remembered?.folderId ?? '')
++  const [accountId, setAccountId] = useState<number | ''>(remembered?.accountId ?? '')
++  const [search, setSearch] = useState(remembered?.search ?? '')
++  const [selected, setSelected] = useState<number | null>(remembered?.selectedDialogId ?? null)
++  const [draftsByDialogId, setDraftsByDialogId] = useState<Record<string, string>>(() => ({ ...(remembered?.draftsByDialogId || {}) }))
++  const [replyTargetIdsByDialogId, setReplyTargetIdsByDialogId] = useState<Record<string, number>>(() => ({ ...(remembered?.replyTargetIdsByDialogId || {}) }))
++  const [collapsedAccountIds, setCollapsedAccountIds] = useState<number[]>(remembered?.collapsedAccountIds ?? [])
++  const collapsed = useMemo(() => new Set(collapsedAccountIds), [collapsedAccountIds])
++  const [inboxAccountOrder, setInboxAccountOrder] = useState<number[]>(readInboxAccountOrder)
++  const [draggingAccountId, setDraggingAccountId] = useState<number | null>(null)
++  const [dragOverAccountId, setDragOverAccountId] = useState<number | null>(null)
+   const [renderedMessages, setRenderedMessages] = useState<MessageItem[]>([])
+   const [beforeCursor, setBeforeCursor] = useState<number | null>(null)
+   const [hasOlderLocal, setHasOlderLocal] = useState(false)
+@@ -49,14 +93,13 @@ export default function InboxPage() {
+   const [showNewMessages, setShowNewMessages] = useState(false)
+   const [activePopover, setActivePopover] = useState<'closed' | 'emoji' | 'quick'>('closed')
+   const [quickText, setQuickText] = useState('')
+-  const [foldersCollapsed, setFoldersCollapsed] = useState(false)
+-  const [folderSearch, setFolderSearch] = useState('')
++  const [foldersCollapsed, setFoldersCollapsed] = useState(remembered?.foldersCollapsed ?? false)
++  const [folderSearch, setFolderSearch] = useState(remembered?.folderSearch ?? '')
+   const [folderCreateOpen, setFolderCreateOpen] = useState(false)
+   const [folderCreateAccountId, setFolderCreateAccountId] = useState<number | ''>('')
+   const [folderCreateName, setFolderCreateName] = useState('')
+   const [draggingFolder, setDraggingFolder] = useState<number | null>(null)
+-  const [folderOrder, setFolderOrder] = useState<number[]>([])
+-  const [replyTarget, setReplyTarget] = useState<MessageItem | null>(null)
++  const [folderOrder, setFolderOrder] = useState<number[]>(remembered?.folderOrder ?? [])
+   const [dialogMenu, setDialogMenu] = useState<MenuPoint<Dialog> | null>(null)
+   const [messageMenu, setMessageMenu] = useState<MenuPoint<MessageItem> | null>(null)
+   const [forwardTarget, setForwardTarget] = useState<MessageItem | null>(null)
+@@ -68,12 +111,46 @@ export default function InboxPage() {
+   const messagesRef = useRef<HTMLDivElement>(null)
+   const textareaRef = useRef<HTMLTextAreaElement>(null)
+   const popoverRef = useRef<HTMLDivElement>(null)
++  const emojiButtonRef = useRef<HTMLButtonElement>(null)
++  const quickButtonRef = useRef<HTMLButtonElement>(null)
+   const loadingOlderRef = useRef(false)
+   const isNearBottomRef = useRef(true)
+   const renderedRef = useRef<MessageItem[]>([])
+   const initialSyncRef = useRef<SyncDialogResult | null>(null)
+   const initializedDialogRef = useRef<number | null>(null)
+   const lastTypingRef = useRef(0)
++  const previousAccountIdRef = useRef<number | ''>(accountId)
++  const reply = selected == null ? '' : draftsByDialogId[String(selected)] || ''
++  const replyTargetId = selected == null ? null : replyTargetIdsByDialogId[String(selected)] ?? null
++  const replyTarget = useMemo(() => replyTargetId == null ? null : renderedMessages.find(message => message.vk_message_id === replyTargetId) || null, [renderedMessages, replyTargetId])
++  const setReply = useCallback<Dispatch<SetStateAction<string>>>((nextValue) => {
++    if (selected == null) return
++    setDraftsByDialogId(previous => {
++      const key = String(selected)
++      const current = previous[key] || ''
++      const value = typeof nextValue === 'function' ? nextValue(current) : nextValue
++      if (value === current) return previous
++      const next = { ...previous }
++      if (value) next[key] = value
++      else delete next[key]
++      return next
++    })
++  }, [selected])
++  const setReplyTargetId = useCallback((value: number | null) => {
++    if (selected == null) return
++    setReplyTargetIdsByDialogId(previous => {
++      const key = String(selected)
++      if (value == null) {
++        if (!(key in previous)) return previous
++        const next = { ...previous }
++        delete next[key]
++        return next
++      }
++      if (previous[key] === value) return previous
++      return { ...previous, [key]: value }
++    })
++  }, [selected])
++  useAutoGrowTextarea(textareaRef, reply)
+ 
+   const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => api<Account[]>('/accounts') })
+   const suffix = new URLSearchParams({
+@@ -94,8 +171,43 @@ export default function InboxPage() {
+   const folders = useQuery({ queryKey: ['dialog-folders', accountId], queryFn: () => api<DialogFolder[]>(`/inbox/folders${accountId ? `?account_id=${accountId}` : ''}`) })
+   const messages = useQuery({ queryKey: ['dialog', selected], queryFn: () => api<MessagePayload>(`/inbox/dialogs/${selected}?limit=50`), enabled: selected != null, refetchInterval: selected != null ? 4000 : false })
+   const quickReplies = useQuery({ queryKey: ['quick-replies'], queryFn: () => api<QuickReply[]>('/quick-replies'), enabled: activePopover === 'quick' })
+-  useEffect(() => { setFolderId('') }, [accountId])
++
++  useEffect(() => {
++    const routeFilter = explicitFilter(location.search)
++    if (routeFilter) setFilter(routeFilter)
++  }, [location.search])
++  useEffect(() => {
++    if (previousAccountIdRef.current === accountId) return
++    previousAccountIdRef.current = accountId
++    setFolderId('')
++  }, [accountId])
+   useEffect(() => { if (filter === 'archive') setFolderId('') }, [filter])
++  useEffect(() => {
++    uiStore.write<InboxSessionUi>(INBOX_SESSION_KEY, {
++      filter,
++      folderId,
++      accountId,
++      search,
++      selectedDialogId: selected,
++      collapsedAccountIds,
++      foldersCollapsed,
++      folderSearch,
++      folderOrder,
++      draftsByDialogId,
++      replyTargetIdsByDialogId,
++    })
++  }, [uiStore, filter, folderId, accountId, search, selected, collapsedAccountIds, foldersCollapsed, folderSearch, folderOrder, draftsByDialogId, replyTargetIdsByDialogId])
++  useEffect(() => {
++    if (!accounts.data) return
++    const currentIds = accounts.data.map(account => account.id)
++    setInboxAccountOrder(previous => {
++      const next = normalizeInboxAccountOrder(previous, currentIds)
++      if (sameNumberArray(previous, next)) return previous
++      localStorage.setItem(INBOX_ACCOUNT_ORDER_STORAGE_KEY, JSON.stringify(next))
++      return next
++    })
++    setCollapsedAccountIds(previous => previous.filter(id => currentIds.includes(id)))
++  }, [accounts.data])
+ 
+   const syncAccounts = useMutation({ mutationFn: (id: number) => api(`/inbox/sync?account_id=${id}`, { method: 'POST' }), onSuccess: () => client.invalidateQueries({ queryKey: ['dialogs'] }), onError: (error: Error) => toast.error(error.message) })
+   const syncDialog = useMutation({
+@@ -128,25 +240,70 @@ export default function InboxPage() {
+   const deleteQuick = useMutation({ mutationFn: (id: string) => api(`/quick-replies/${id}`, { method: 'DELETE' }), onSuccess: () => client.invalidateQueries({ queryKey: ['quick-replies'] }), onError: (error: Error) => toast.error(error.message) })
+ 
+   const send = useMutation({
+-    mutationFn: async ({ dialogId = selected, text = reply, replyTo = replyTarget?.vk_message_id, forward }: { dialogId?: number | null; text?: string; replyTo?: number; forward?: Record<string, unknown> } = {}) => {
++    mutationFn: async (input: { dialogId?: number | null; text?: string; replyTo?: number; forward?: Record<string, unknown> } = {}) => {
++      const dialogId = input.dialogId === undefined ? selected : input.dialogId
++      const text = input.text === undefined ? reply : input.text
++      const replyTo = Object.prototype.hasOwnProperty.call(input, 'replyTo') ? input.replyTo : replyTargetId ?? undefined
+       if (dialogId == null) throw new Error('Диалог не выбран')
+-      const result = await api<ReplyResult>(`/inbox/dialogs/${dialogId}/reply`, { method: 'POST', body: JSON.stringify({ body: text, reply_to: replyTo, forward }) })
++      const result = await api<ReplyResult>(`/inbox/dialogs/${dialogId}/reply`, { method: 'POST', body: JSON.stringify({ body: text, reply_to: replyTo, forward: input.forward }) })
+       if (!result.ok) throw new Error(result.error?.trim() || 'Не удалось отправить сообщение через VK')
+       return { ...result, dialogId }
+     },
+-    onSuccess: result => { setReply(''); setReplyTarget(null); setForwardTarget(null); if (result.dialogId === selected && selected != null) syncDialog.mutate({ dialogId: selected, offset: 0, count: 50 }); client.invalidateQueries({ queryKey: ['dialogs'] }) },
++    onSuccess: result => {
++      setDraftsByDialogId(previous => {
++        const key = String(result.dialogId)
++        if (!(key in previous)) return previous
++        const next = { ...previous }
++        delete next[key]
++        return next
++      })
++      setReplyTargetIdsByDialogId(previous => {
++        const key = String(result.dialogId)
++        if (!(key in previous)) return previous
++        const next = { ...previous }
++        delete next[key]
++        return next
++      })
++      setForwardTarget(null); if (result.dialogId === selected && selected != null) syncDialog.mutate({ dialogId: selected, offset: 0, count: 50 }); client.invalidateQueries({ queryKey: ['dialogs'] })
++    },
+     onError: (error: Error) => toast.error(error.message),
+   })
+ 
+   const editMessage = useMutation({ mutationFn: ({ message, text }: { message: MessageItem; text: string }) => api(`/inbox/dialogs/${selected}/messages/${message.vk_message_id}`, { method: 'PATCH', body: JSON.stringify({ body: text }) }), onSuccess: () => { setMessageMenu(null); if (selected != null) syncDialog.mutate({ dialogId: selected, offset: 0, count: 50 }) }, onError: (error: Error) => toast.error(error.message) })
+   const deleteMessage = useMutation({ mutationFn: (message: MessageItem) => api(`/inbox/dialogs/${selected}/messages/${message.vk_message_id}?delete_for_all=true`, { method: 'DELETE' }), onSuccess: () => { setMessageMenu(null); client.invalidateQueries({ queryKey: ['dialog', selected] }); client.invalidateQueries({ queryKey: ['dialogs'] }) }, onError: (error: Error) => toast.error(error.message) })
+ 
+   const grouped = useMemo(() => {
+-    const map = new Map<string, Dialog[]>()
+-    for (const dialog of dialogs.data || []) { const list = map.get(dialog.account_name) || []; list.push(dialog); map.set(dialog.account_name, list) }
+-    for (const rows of map.values()) rows.sort((a, b) => Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned)) || String(b.pinned_at || b.last_message_at || '').localeCompare(String(a.pinned_at || a.last_message_at || '')))
+-    return [...map.entries()]
+-  }, [dialogs.data])
++    const accountNames = new Map((accounts.data || []).map(account => [account.id, account.display_name]))
++    const naturalRank = new Map((accounts.data || []).map((account, index) => [account.id, index]))
++    const savedRank = new Map(inboxAccountOrder.map((id, index) => [id, index]))
++    const map = new Map<number, InboxAccountGroup>()
++
++    for (const dialog of dialogs.data || []) {
++      let group = map.get(dialog.account_id)
++      if (!group) {
++        group = {
++          accountId: dialog.account_id,
++          accountName: accountNames.get(dialog.account_id) || dialog.account_name || `Аккаунт ${dialog.account_id}`,
++          rows: [],
++        }
++        map.set(dialog.account_id, group)
++      }
++      group.rows.push(dialog)
++    }
++
++    for (const group of map.values()) {
++      group.rows.sort((a, b) => Number(Boolean(b.is_pinned)) - Number(Boolean(a.is_pinned)) || String(b.pinned_at || b.last_message_at || '').localeCompare(String(a.pinned_at || a.last_message_at || '')))
++    }
++
++    return [...map.values()].sort((left, right) => {
++      const leftSaved = savedRank.get(left.accountId)
++      const rightSaved = savedRank.get(right.accountId)
++      if (leftSaved != null || rightSaved != null) return (leftSaved ?? Number.MAX_SAFE_INTEGER) - (rightSaved ?? Number.MAX_SAFE_INTEGER)
++      const leftNatural = naturalRank.get(left.accountId)
++      const rightNatural = naturalRank.get(right.accountId)
++      return (leftNatural ?? Number.MAX_SAFE_INTEGER) - (rightNatural ?? Number.MAX_SAFE_INTEGER) || left.accountId - right.accountId
++    })
++  }, [accounts.data, dialogs.data, inboxAccountOrder])
+   const selectedDialog = useMemo(() => (dialogs.data || []).find(dialog => dialog.id === selected) || null, [dialogs.data, selected])
+   const orderedFolders = useMemo(() => {
+     const rows = [...(Array.isArray(folders.data) ? folders.data : [])].filter(folder => folder.name.toLowerCase().includes(folderSearch.trim().toLowerCase()))
+@@ -155,6 +312,18 @@ export default function InboxPage() {
+   }, [folderOrder, folderSearch, folders.data])
+   const folderGroups = useMemo(() => (accounts.data || []).map(account => ({ account, folders: orderedFolders.filter(folder => folder.account_id === account.id) })).filter(group => group.folders.length), [accounts.data, orderedFolders])
+   const dropFolder = (target: number) => { if (draggingFolder == null || draggingFolder === target) return setDraggingFolder(null); const ids = orderedFolders.map(folder => folder.id); const from = ids.indexOf(draggingFolder); const to = ids.indexOf(target); if (from >= 0 && to >= 0) { ids.splice(from, 1); ids.splice(to, 0, draggingFolder); setFolderOrder(ids) } setDraggingFolder(null) }
++  const dropAccount = (targetId: number) => {
++    if (draggingAccountId == null || draggingAccountId === targetId) { setDraggingAccountId(null); setDragOverAccountId(null); return }
++    const currentIds = (accounts.data || []).map(account => account.id)
++    setInboxAccountOrder(previous => {
++      const normalized = normalizeInboxAccountOrder(previous, currentIds)
++      const next = moveInboxAccountOrder(normalized, draggingAccountId, targetId)
++      localStorage.setItem(INBOX_ACCOUNT_ORDER_STORAGE_KEY, JSON.stringify(next))
++      return next
++    })
++    setDraggingAccountId(null)
++    setDragOverAccountId(null)
++  }
+   const openFolder = (folder: DialogFolder) => { setFilter('all'); setAccountId(folder.account_id); setFolderId(folder.id) }
+   const beginCreateFolder = (owner?: number) => { setFolderCreateAccountId(owner || (accountId ? Number(accountId) : '')); setFolderCreateName(''); setFolderCreateOpen(true) }
+ 
+@@ -167,7 +336,7 @@ export default function InboxPage() {
+   useEffect(() => { renderedRef.current = renderedMessages }, [renderedMessages])
+   useEffect(() => {
+     if (selected == null) return
+-    setRenderedMessages([]); renderedRef.current = []; setBeforeCursor(null); setHasOlderLocal(false); setRemoteOffset(0); setHasMoreRemote(true); setSyncError(''); setShowNewMessages(false); isNearBottomRef.current = true; initialSyncRef.current = null; initializedDialogRef.current = null; setReplyTarget(null); setMessageMenu(null); setForwardTarget(null)
++    setRenderedMessages([]); renderedRef.current = []; setBeforeCursor(null); setHasOlderLocal(false); setRemoteOffset(0); setHasMoreRemote(true); setSyncError(''); setShowNewMessages(false); isNearBottomRef.current = true; initialSyncRef.current = null; initializedDialogRef.current = null; setMessageMenu(null); setForwardTarget(null)
+     syncDialog.mutate({ dialogId: selected, offset: 0, count: 50 }, { onSuccess: result => { initialSyncRef.current = result; setRemoteOffset(current => Math.max(current, result.next_offset)); setHasMoreRemote(result.has_more) } })
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [selected])
+@@ -231,7 +400,12 @@ export default function InboxPage() {
+ 
+   useEffect(() => {
+     if (activePopover === 'closed') return
+-    const pointer = (event: PointerEvent) => { if (!popoverRef.current?.contains(event.target as Node)) setActivePopover('closed') }
++    const pointer = (event: PointerEvent) => {
++      const target = event.target
++      const insideControls = target instanceof Node && Boolean(popoverRef.current?.contains(target))
++      const insidePopover = target instanceof Element && Boolean(target.closest('.composer-popover'))
++      if (!insideControls && !insidePopover) setActivePopover('closed')
++    }
+     const key = (event: KeyboardEvent) => { if (event.key === 'Escape') setActivePopover('closed') }
+     document.addEventListener('pointerdown', pointer); document.addEventListener('keydown', key)
+     return () => { document.removeEventListener('pointerdown', pointer); document.removeEventListener('keydown', key) }
+@@ -250,7 +424,7 @@ export default function InboxPage() {
+       <aside className="conversation-list">
+         <div className="inbox-filters"><label className="search-box"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск диалогов" /></label><select value={accountId} onChange={e => setAccountId(e.target.value ? Number(e.target.value) : '')}><option value="">Все аккаунты</option>{accounts.data?.map(account => <option key={account.id} value={account.id}>{account.display_name}</option>)}</select><div className="segmented segmented--full inbox-view-tabs"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Все</button><button className={filter === 'unread' ? 'active' : ''} onClick={() => setFilter('unread')}>Непрочитанные</button><button className={filter === 'archive' ? 'active' : ''} onClick={() => setFilter('archive')}>Архив</button></div><div className="folder-filter folder-workspace"><div className="folder-head"><button type="button" className="folder-collapse" onClick={() => setFoldersCollapsed(value => !value)}><ChevronDown size={14} className={foldersCollapsed ? 'rotate-left' : ''} /><strong>Папки</strong></button><button type="button" onClick={() => beginCreateFolder()}>+ Создать папку</button></div>{!foldersCollapsed && <>{(folders.data?.length || 0) >= 10 && <label className="folder-search"><Search size={13} /><input value={folderSearch} onChange={event => setFolderSearch(event.target.value)} placeholder="Найти папку" /></label>}<div className="folder-scroll" data-testid="folder-scroll">{accountId ? orderedFolders.filter(folder => folder.account_id === Number(accountId)).map(folder => <div key={folder.id} className={`folder-row ${folderId === folder.id ? 'active' : ''}`} draggable onDragStart={() => setDraggingFolder(folder.id)} onDragOver={event => event.preventDefault()} onDrop={() => dropFolder(folder.id)}><button type="button" onClick={() => { setFilter('all'); setFolderId(folderId === folder.id ? '' : folder.id) }}><span>{folder.name}</span><b>{folder.dialogs_count}</b></button><button type="button" aria-label={`Переименовать папку ${folder.name}`} onClick={() => { const name = prompt('Новое название папки', folder.name)?.trim(); if (name) renameFolder.mutate({ id: folder.id, name }) }}>✎</button><button type="button" aria-label={`Удалить папку ${folder.name}`} onClick={() => confirm(`Удалить папку «${folder.name}»? Диалоги останутся.`) && deleteFolder.mutate(folder.id)}>×</button></div>) : folderGroups.map(({ account, folders: rows }) => <section className="folder-account-group" key={account.id}><header>{account.display_name}</header>{rows.map(folder => <div key={folder.id} className="folder-row" draggable onDragStart={() => setDraggingFolder(folder.id)} onDragOver={event => event.preventDefault()} onDrop={() => dropFolder(folder.id)}><button type="button" onClick={() => openFolder(folder)}><span>{folder.name}</span><b>{folder.dialogs_count}</b></button><button type="button" aria-label={`Переименовать папку ${folder.name}`} onClick={() => { const name = prompt('Новое название папки', folder.name)?.trim(); if (name) renameFolder.mutate({ id: folder.id, name }) }}>✎</button><button type="button" aria-label={`Удалить папку ${folder.name}`} onClick={() => confirm(`Удалить папку «${folder.name}»? Диалоги останутся.`) && deleteFolder.mutate(folder.id)}>×</button></div>)}</section>)}</div>{folderCreateOpen && <div className="folder-create-panel"><select aria-label="Аккаунт папки" value={folderCreateAccountId} onChange={event => setFolderCreateAccountId(event.target.value ? Number(event.target.value) : '')}><option value="">Выберите аккаунт</option>{accounts.data?.map(account => <option key={account.id} value={account.id}>{account.display_name}</option>)}</select><input aria-label="Название папки" value={folderCreateName} onChange={event => setFolderCreateName(event.target.value)} placeholder="Название папки" /><div><button type="button" disabled={!folderCreateAccountId || !folderCreateName.trim()} onClick={() => { if (folderCreateAccountId && folderCreateName.trim()) createFolder.mutate({ account_id: Number(folderCreateAccountId), name: folderCreateName.trim() }, { onSuccess: () => { setFolderCreateOpen(false); setFolderCreateName('') } }) }}>Создать</button><button type="button" onClick={() => setFolderCreateOpen(false)}>Отмена</button></div></div>}</>}</div></div>
+         <div className="dialog-scroll" data-testid="dialog-scroll">
+-          {grouped.length ? grouped.map(([accountName, rows]) => { const closed = collapsed.has(accountName); return <section className={`dialog-group ${closed ? 'dialog-group--collapsed' : ''}`} key={accountName}><header><button onClick={() => setCollapsed(previous => { const next = new Set(previous); next.has(accountName) ? next.delete(accountName) : next.add(accountName); return next })}><ChevronDown size={14} /><UserRound size={15} /><strong>{accountName}</strong>{filter !== 'archive' && <span>{rows.filter(row => row.unread_count > 0).length}</span>}</button></header>{!closed && rows.map(dialog => <button key={dialog.id} className={selected === dialog.id ? 'active' : ''} onClick={() => openDialog(dialog)} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setDialogMenu({ value: dialog, x: event.clientX, y: event.clientY }) }}>{dialog.avatar_url ? <img src={dialog.avatar_url} alt="" /> : <div className="dialog-avatar">{dialog.title.slice(0, 1)}</div>}<div className="dialog-card-copy"><div className="dialog-title-row"><strong>{dialog.is_pinned && <Pin size={11} className="pin-inline" />}{dialog.title}</strong><time>{dialog.last_message_at ? formatLocalDateTime(dialog.last_message_at) : ''}</time></div><small className="dialog-preview">{lastMessagePreview(dialog)}</small></div>{filter !== 'archive' && dialog.unread_count > 0 && <b className="dialog-unread">{dialog.unread_count}</b>}</button>)}</section> }) : <EmptyState icon={<Inbox />} title={filter === 'archive' ? 'Архив пуст' : 'Диалогов пока нет'} text={filter === 'archive' ? 'Архивированные диалоги появятся здесь и останутся до ручного возврата.' : 'Синхронизация выполняется автоматически; при необходимости нажмите «Обновить диалоги».'} />}
++          {grouped.length ? grouped.map(({ accountId: groupAccountId, accountName, rows }) => { const closed = collapsed.has(groupAccountId); const dragOver = dragOverAccountId === groupAccountId && draggingAccountId !== groupAccountId; return <section className={`dialog-group ${closed ? 'dialog-group--collapsed' : ''} ${dragOver ? 'dialog-group--drag-over' : ''}`} key={groupAccountId} data-testid="dialog-account-group" data-account-id={groupAccountId} onDragOver={event => { if (draggingAccountId == null) return; event.preventDefault(); setDragOverAccountId(groupAccountId) }} onDrop={event => { event.preventDefault(); dropAccount(groupAccountId) }}><header className="dialog-account-head"><button type="button" className="dialog-account-drag-handle" draggable aria-label={`Перетащить аккаунт ${accountName}`} onDragStart={event => { event.stopPropagation(); setDraggingAccountId(groupAccountId); setDragOverAccountId(null) }} onDragEnd={() => { setDraggingAccountId(null); setDragOverAccountId(null) }}><GripVertical size={14} /></button><button type="button" className="dialog-account-toggle" onClick={() => setCollapsedAccountIds(previous => previous.includes(groupAccountId) ? previous.filter(id => id !== groupAccountId) : [...previous, groupAccountId])}><ChevronDown size={14} /><UserRound size={15} /><strong>{accountName}</strong>{filter !== 'archive' && <span>{rows.filter(row => row.unread_count > 0).length}</span>}</button></header>{!closed && rows.map(dialog => <button key={dialog.id} className={selected === dialog.id ? 'active' : ''} onClick={() => openDialog(dialog)} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setDialogMenu({ value: dialog, x: event.clientX, y: event.clientY }) }}>{dialog.avatar_url ? <img src={dialog.avatar_url} alt="" /> : <div className="dialog-avatar">{dialog.title.slice(0, 1)}</div>}<div className="dialog-card-copy"><div className="dialog-title-row"><strong>{dialog.is_pinned && <Pin size={11} className="pin-inline" />}{dialog.title}</strong><time>{dialog.last_message_at ? formatLocalDateTime(dialog.last_message_at) : ''}</time></div><small className="dialog-preview">{lastMessagePreview(dialog)}</small></div>{filter !== 'archive' && dialog.unread_count > 0 && <b className="dialog-unread">{dialog.unread_count}</b>}</button>)}</section> }) : <EmptyState icon={<Inbox />} title={filter === 'archive' ? 'Архив пуст' : 'Диалогов пока нет'} text={filter === 'archive' ? 'Архивированные диалоги появятся здесь и останутся до ручного возврата.' : 'Синхронизация выполняется автоматически; при необходимости нажмите «Обновить диалоги».'} />}
+         </div>
+       </aside>
+ 
+@@ -262,22 +436,22 @@ export default function InboxPage() {
+           <div className="messages-stage"><div className="messages-scroll" data-testid="messages-scroll" ref={messagesRef} onScroll={handleMessageScroll}>{(syncDialog.isPending || messages.isPending) && <div className="chat-sync-state">Синхронизирую историю…</div>}{syncError && <div className="chat-sync-error"><span>{syncError}</span><button onClick={refreshCurrentDialog}>Повторить</button></div>}{messages.isError && !renderedMessages.length && <div className="chat-sync-error"><span>{messages.error instanceof Error ? messages.error.message : 'Не удалось загрузить историю'}</span><button onClick={() => messages.refetch()}>Повторить</button></div>}{renderedMessages.map(message => <MessageBubble key={message.vk_message_id} message={message} onReplyJump={jumpToMessage} onContextMenu={(event, value) => { event.preventDefault(); event.stopPropagation(); setMessageMenu({ value, x: event.clientX, y: event.clientY }) }} />)}{!messages.isPending && !renderedMessages.length && !messages.isError && <div className="chat-empty">В этом диалоге пока нет сообщений</div>}</div>{showNewMessages && <button className="new-messages-button" aria-label="Новые сообщения" onClick={() => scrollToBottom('smooth')}>↓ Новые сообщения</button>}</div>
+           {canWrite ? <form className="composer" onSubmit={e => { e.preventDefault(); if (reply.trim()) send.mutate({}) }}>
+             <div className="reply-account">От: <strong>{replyAccount?.note || replyAccount?.name || activeDialog?.account_name || 'аккаунт'}</strong></div>
+-            {replyTarget && <div className="composer-reply"><span>Ответ на: {replyTarget.body || 'вложение'}</span><button type="button" aria-label="Отменить ответ" onClick={() => setReplyTarget(null)}><X size={13} /></button></div>}
+-            <textarea ref={textareaRef} aria-label="Ответ" value={reply} onChange={e => handleTyping(e.target.value)} placeholder="Напишите ответ…" onKeyDown={e => { if (e.key === 'Escape') { setReplyTarget(null); setActivePopover('closed') } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (reply.trim()) send.mutate({}) } }} />
++            {replyTargetId != null && <div className="composer-reply"><span>Ответ на: {replyTarget?.body || `сообщение #${replyTargetId}`}</span><button type="button" aria-label="Отменить ответ" onClick={() => setReplyTargetId(null)}><X size={13} /></button></div>}
++            <textarea ref={textareaRef} className="composer-input" aria-label="Ответ" value={reply} onChange={e => handleTyping(e.target.value)} placeholder="Напишите ответ…" rows={1} onKeyDown={e => { if (e.key === 'Escape') { setReplyTargetId(null); setActivePopover('closed') } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (reply.trim()) send.mutate({}) } }} />
+             <div className="composer-control-stack" data-testid="composer-controls" ref={popoverRef}>
+-              <button type="button" className="composer-icon-action" aria-label="Смайлики" onClick={() => setActivePopover(value => value === 'emoji' ? 'closed' : 'emoji')}><Smile size={17} /></button>
+-              <button type="button" className="composer-icon-action" aria-label="Быстрые ответы" onClick={() => setActivePopover(value => value === 'quick' ? 'closed' : 'quick')}><Zap size={17} /></button>
++              <button ref={emojiButtonRef} type="button" className="composer-icon-action" aria-label="Смайлики" onClick={() => setActivePopover(value => value === 'emoji' ? 'closed' : 'emoji')}><Smile size={17} /></button>
++              <button ref={quickButtonRef} type="button" className="composer-icon-action" aria-label="Быстрые ответы" onClick={() => setActivePopover(value => value === 'quick' ? 'closed' : 'quick')}><Zap size={17} /></button>
+               <Button type="submit" disabled={!reply.trim()} loading={send.isPending}><Send size={17} />Отправить</Button>
+-              {activePopover === 'emoji' && <div className="composer-popover composer-popover--emoji"><EmojiPicker onInsert={emoji => insertAtCaret(emoji)} /></div>}
+-              {activePopover === 'quick' && <div className="quick-replies-popover composer-popover"><header><strong>Быстрые ответы</strong><button type="button" aria-label="Закрыть быстрые ответы" onClick={() => setActivePopover('closed')}><X size={14} /></button></header>{quickReplies.isLoading ? <span>Загрузка…</span> : quickReplies.data?.length ? <div className="quick-reply-list">{quickReplies.data.map(item => <div key={item.id}><button type="button" className="quick-reply-value" onClick={() => insertAtCaret(item.text)}>{item.text}</button><button type="button" aria-label={`Изменить ${item.text}`} onClick={() => { const text = prompt('Новый текст шаблона', item.text)?.trim(); if (text) void api(`/quick-replies/${item.id}`, { method: 'PATCH', body: JSON.stringify({ text }) }).then(() => client.invalidateQueries({ queryKey: ['quick-replies'] })).catch(error => toast.error(error.message)) }}>✎</button><button type="button" aria-label={`Удалить ${item.text}`} onClick={() => { if (confirm('Удалить этот шаблон?')) deleteQuick.mutate(item.id) }}>×</button></div>)}</div> : <div className="quick-empty">Шаблонов ещё нет</div>}<div className="quick-create"><textarea value={quickText} onChange={e => setQuickText(e.target.value)} placeholder="Текст нового шаблона" /><Button type="button" disabled={!quickText.trim()} onClick={() => createQuick.mutate(quickText)}><Plus size={14} />Создать шаблон</Button></div></div>}
++              {activePopover === 'emoji' && <ScaledOverlay anchor={emojiButtonRef.current} placement="left-end"><div className="composer-popover composer-popover--emoji"><EmojiPicker onInsert={emoji => insertAtCaret(emoji)} /></div></ScaledOverlay>}
++              {activePopover === 'quick' && <ScaledOverlay anchor={quickButtonRef.current} placement="left-end"><div className="quick-replies-popover composer-popover"><header><strong>Быстрые ответы</strong><button type="button" aria-label="Закрыть быстрые ответы" onClick={() => setActivePopover('closed')}><X size={14} /></button></header>{quickReplies.isLoading ? <span>Загрузка…</span> : quickReplies.data?.length ? <div className="quick-reply-list">{quickReplies.data.map(item => <div key={item.id}><button type="button" className="quick-reply-value" onClick={() => insertAtCaret(item.text)}>{item.text}</button><button type="button" aria-label={`Изменить ${item.text}`} onClick={() => { const text = prompt('Новый текст шаблона', item.text)?.trim(); if (text) void api(`/quick-replies/${item.id}`, { method: 'PATCH', body: JSON.stringify({ text }) }).then(() => client.invalidateQueries({ queryKey: ['quick-replies'] })).catch(error => toast.error(error.message)) }}>✎</button><button type="button" aria-label={`Удалить ${item.text}`} onClick={() => { if (confirm('Удалить этот шаблон?')) deleteQuick.mutate(item.id) }}>×</button></div>)}</div> : <div className="quick-empty">Шаблонов ещё нет</div>}<div className="quick-create"><textarea value={quickText} onChange={e => setQuickText(e.target.value)} placeholder="Текст нового шаблона" /><Button type="button" disabled={!quickText.trim()} onClick={() => createQuick.mutate(quickText)}><Plus size={14} />Создать шаблон</Button></div></div></ScaledOverlay>}
+             </div>
+           </form> : <div className="composer-unavailable"><MessageCircle size={18} /><div><strong>Отправка сообщений в этот диалог недоступна</strong>{activePayload?.dialog.write_disabled_reason && <span>VK не разрешает отправку для этого диалога.</span>}</div></div>}
+         </>}
+       </section>
+     </div>
+ 
+-    {dialogMenu && <div className="context-menu" style={{ left: dialogMenu.x, top: dialogMenu.y }} onClick={event => event.stopPropagation()}>{filter === 'archive' || dialogMenu.value.is_archived ? <button onClick={() => archiveDialog.mutate({ id: dialogMenu.value.id, restore: true })}>Вернуть из архива</button> : <><button onClick={() => archiveDialog.mutate({ id: dialogMenu.value.id, restore: false })}>В архив</button><button onClick={() => pinDialog.mutate({ id: dialogMenu.value.id, is_pinned: !dialogMenu.value.is_pinned })}>{dialogMenu.value.is_pinned ? 'Открепить' : 'Закрепить'}</button><div className="context-submenu-label">Добавить в папку ›</div>{(Array.isArray(folders.data) ? folders.data : []).filter(folder => folder.account_id === dialogMenu.value.account_id).map(folder => { const active = Boolean(dialogMenu.value.folder_ids?.includes(folder.id)); return <button key={folder.id} onClick={() => setFolderMembership.mutate({ folder: folder.id, dialog: dialogMenu.value.id, enabled: !active })}>{active ? '✓ ' : ''}{folder.name}</button> })}<button onClick={() => { beginCreateFolder(dialogMenu.value.account_id); setDialogMenu(null) }}>+ Новая папка</button></>}</div>}
+-    {messageMenu && <div className="context-menu" style={{ left: messageMenu.x, top: messageMenu.y }} onClick={event => event.stopPropagation()}><button onClick={() => { setReplyTarget(messageMenu.value); setMessageMenu(null); textareaRef.current?.focus() }}>Ответить</button><button onClick={() => { setForwardTarget(messageMenu.value); setMessageMenu(null) }}>Переслать</button>{messageMenu.value.outgoing && <button onClick={() => { const text = prompt('Изменить сообщение', messageMenu.value.body)?.trim(); if (text != null) editMessage.mutate({ message: messageMenu.value, text }) }}>Редактировать</button>}<button onClick={() => navigator.clipboard?.writeText(messageMenu.value.body || '')}>Скопировать текст</button><button onClick={() => navigator.clipboard?.writeText(String(messageMenu.value.vk_message_id))}>Скопировать ID</button><button className="danger-text" onClick={() => { if (confirm('Удалить сообщение у всех, если VK это разрешит?')) deleteMessage.mutate(messageMenu.value) }}>Удалить</button></div>}
+-    {forwardTarget && <div className="modal-backdrop" onClick={() => setForwardTarget(null)}><div className="forward-picker" onClick={event => event.stopPropagation()}><header><strong>Переслать сообщение</strong><button onClick={() => setForwardTarget(null)}><X size={15} /></button></header><p>Настоящая пересылка доступна в диалоги того же VK-аккаунта.</p>{forwardDialogs.length ? forwardDialogs.map(dialog => <button key={dialog.id} onClick={() => send.mutate({ dialogId: dialog.id, text: '', replyTo: undefined, forward: { peer_id: activeDialog?.peer_id, message_ids: [forwardTarget.vk_message_id] } })}>{dialog.avatar_url ? <img src={dialog.avatar_url} alt="" /> : <span>{dialog.title.slice(0,1)}</span>}<b>{dialog.title}</b></button>) : <div className="soft-empty">Других диалогов этого аккаунта нет</div>}</div></div>}
++    {dialogMenu && <ScaledOverlay point={{ x: dialogMenu.x, y: dialogMenu.y }}><div className="context-menu" onClick={event => event.stopPropagation()}>{filter === 'archive' || dialogMenu.value.is_archived ? <button onClick={() => archiveDialog.mutate({ id: dialogMenu.value.id, restore: true })}>Вернуть из архива</button> : <><button onClick={() => archiveDialog.mutate({ id: dialogMenu.value.id, restore: false })}>В архив</button><button onClick={() => pinDialog.mutate({ id: dialogMenu.value.id, is_pinned: !dialogMenu.value.is_pinned })}>{dialogMenu.value.is_pinned ? 'Открепить' : 'Закрепить'}</button><div className="context-submenu-label">Добавить в папку ›</div>{(Array.isArray(folders.data) ? folders.data : []).filter(folder => folder.account_id === dialogMenu.value.account_id).map(folder => { const active = Boolean(dialogMenu.value.folder_ids?.includes(folder.id)); return <button key={folder.id} onClick={() => setFolderMembership.mutate({ folder: folder.id, dialog: dialogMenu.value.id, enabled: !active })}>{active ? '✓ ' : ''}{folder.name}</button> })}<button onClick={() => { beginCreateFolder(dialogMenu.value.account_id); setDialogMenu(null) }}>+ Новая папка</button></>}</div></ScaledOverlay>}
++    {messageMenu && <ScaledOverlay point={{ x: messageMenu.x, y: messageMenu.y }}><div className="context-menu" onClick={event => event.stopPropagation()}><button onClick={() => { setReplyTargetId(messageMenu.value.vk_message_id); setMessageMenu(null); textareaRef.current?.focus() }}>Ответить</button><button onClick={() => { setForwardTarget(messageMenu.value); setMessageMenu(null) }}>Переслать</button>{messageMenu.value.outgoing && <button onClick={() => { const text = prompt('Изменить сообщение', messageMenu.value.body)?.trim(); if (text != null) editMessage.mutate({ message: messageMenu.value, text }) }}>Редактировать</button>}<button onClick={() => navigator.clipboard?.writeText(messageMenu.value.body || '')}>Скопировать текст</button><button onClick={() => navigator.clipboard?.writeText(String(messageMenu.value.vk_message_id))}>Скопировать ID</button><button className="danger-text" onClick={() => { if (confirm('Удалить сообщение у всех, если VK это разрешит?')) deleteMessage.mutate(messageMenu.value) }}>Удалить</button></div></ScaledOverlay>}
++    {forwardTarget && <ScaledViewportOverlay><div className="modal-backdrop" onClick={() => setForwardTarget(null)}><div className="forward-picker" onClick={event => event.stopPropagation()}><header><strong>Переслать сообщение</strong><button onClick={() => setForwardTarget(null)}><X size={15} /></button></header><p>Настоящая пересылка доступна в диалоги того же VK-аккаунта.</p>{forwardDialogs.length ? forwardDialogs.map(dialog => <button key={dialog.id} onClick={() => send.mutate({ dialogId: dialog.id, text: '', replyTo: undefined, forward: { peer_id: activeDialog?.peer_id, message_ids: [forwardTarget.vk_message_id] } })}>{dialog.avatar_url ? <img src={dialog.avatar_url} alt="" /> : <span>{dialog.title.slice(0,1)}</span>}<b>{dialog.title}</b></button>) : <div className="soft-empty">Других диалогов этого аккаунта нет</div>}</div></div></ScaledViewportOverlay>}
+   </div>
+ }

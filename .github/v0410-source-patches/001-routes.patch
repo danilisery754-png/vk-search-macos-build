@@ -1,0 +1,12 @@
+diff --git a/v047_source/backend/app/api/routes.py b/v047_source/backend/app/api/routes.py
+--- a/v047_source/backend/app/api/routes.py
++++ b/v047_source/backend/app/api/routes.py
+@@ -34,7 +34,7 @@ def services(request: Request):
+ 
+ @router.get("/health")
+ def health(request: Request):
+-    return {"ok": True, "version": "0.4.9", "work": services(request).runs.current_state()}
++    return {"ok": True, "version": "0.4.10", "work": services(request).runs.current_state()}
+ 
+ 
+ @router.get("/dashboard")

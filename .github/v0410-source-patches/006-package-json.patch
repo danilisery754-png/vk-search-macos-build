@@ -1,0 +1,19 @@
+diff --git a/v047_source/frontend/package.json b/v047_source/frontend/package.json
+--- a/v047_source/frontend/package.json
++++ b/v047_source/frontend/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "vk-search-ui",
+   "private": true,
+-  "version": "0.4.9",
++  "version": "0.4.10",
+   "type": "module",
+   "scripts": {
+     "dev": "vite",
+@@ -30,4 +30,4 @@
+     "vite": "7.1.3",
+     "vitest": "3.2.4"
+   }
+-}
+\ No newline at end of file
++}

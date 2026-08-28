@@ -1,0 +1,18 @@
+diff --git a/v047_source/build/VKOutreachManagerMac.spec b/v047_source/build/VKOutreachManagerMac.spec
+--- a/v047_source/build/VKOutreachManagerMac.spec
++++ b/v047_source/build/VKOutreachManagerMac.spec
+@@ -74,11 +74,11 @@ app = BUNDLE(
+     name="VK Search.app",
+     icon=str(ROOT / "build" / "app-icon.icns"),
+     bundle_identifier="com.vkoutreach.manager",
+-    version="0.4.9",
++    version="0.4.10",
+     info_plist={
+         "CFBundleDisplayName": "VK Search",
+-        "CFBundleShortVersionString": "0.4.9",
+-        "CFBundleVersion": "0.4.9",
++        "CFBundleShortVersionString": "0.4.10",
++        "CFBundleVersion": "0.4.10",
+         "LSMinimumSystemVersion": "13.0",
+         "NSHighResolutionCapable": True,
+         "NSSupportsAutomaticGraphicsSwitching": True,
