@@ -52,8 +52,13 @@ jobs:
             if [[ -e "$target_file" ]]; then
               patch --batch --forward "$target_file" < "$patch_file"
             else
-              git apply --check "$patch_file"
-              git apply "$patch_file"
+              local normalized
+              normalized="$(mktemp)"
+              cat "$patch_file" > "$normalized"
+              printf '\n' >> "$normalized"
+              git apply --check "$normalized"
+              git apply "$normalized"
+              rm -f "$normalized"
             fi
           }
 
