@@ -1,0 +1,38 @@
+name: Test VK Search v0.4.11 Inbox polish
+
+on:
+  push:
+    branches:
+      - vk-search-v0411-inbox-polish
+    paths:
+      - 'v047_source/frontend/src/**'
+      - '.github/workflows/test-v0411-inbox.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vk-search-v0411-inbox-tests
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: v047_source/frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: v047_source/frontend
+        run: npm ci
+      - name: Run v0.4.11 regression tests
+        working-directory: v047_source/frontend
+        run: npm test -- src/hooks/useAutoGrowTextarea.v0411.test.ts src/pages/InboxPage.v0411.test.tsx src/styles/v0411-inbox.test.ts
+      - name: Typecheck
+        working-directory: v047_source/frontend
+        run: npm run typecheck
