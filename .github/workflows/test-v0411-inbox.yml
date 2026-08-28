@@ -19,7 +19,7 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,11 +30,15 @@ jobs:
       - name: Install frontend dependencies
         working-directory: v047_source/frontend
         run: npm ci
-      - name: Run v0.4.11 regression tests
+      - name: Run v0.4.11 focused regressions
         working-directory: v047_source/frontend
         run: npm test -- src/hooks/useAutoGrowTextarea.v0411.test.ts src/pages/InboxPage.v0411.test.tsx src/styles/v0411-inbox.test.ts
+      - name: Run full frontend regression suite
+        working-directory: v047_source/frontend
+        run: npm test
       - name: Typecheck
         working-directory: v047_source/frontend
         run: npm run typecheck
-
-# Source is materialized before this gate; this comment intentionally retriggers the push workflow.
+      - name: Production frontend build
+        working-directory: v047_source/frontend
+        run: npm run build
