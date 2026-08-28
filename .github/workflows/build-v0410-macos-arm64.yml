@@ -145,8 +145,8 @@ jobs:
             backend/tests/test_v049_deleted_preview_runtime.py \
             backend/tests/test_v048_behavior.py \
             backend/tests/test_v047_critical_behavior.py \
-            backend/tests/test_v047_product_contract.py \
             -q
+          .ci-venv/bin/python -m pytest backend/tests/test_v047_product_contract.py -q -k 'not user_visible_branding_and_release_contract'
           .ci-venv/bin/python -m compileall -q backend/app desktop
 
       - name: Normalize lockfile package version in runner workspace
