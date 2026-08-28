@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/build-v0410-public.yml'
       - '.github/v0410-source-patches/**'
+      - '.github/v0410-source-files/**'
 
 permissions:
   contents: write
@@ -36,14 +37,23 @@ jobs:
           grep -q 'version = "0.4.9"' v047_source/backend/pyproject.toml
           grep -q '45d96c6f2931bbeb346e82a1e136ea5c624002ff' SOURCE_PROVENANCE.md
           test "$(find .github/v0410-source-patches -type f -name '*.patch' | wc -l | tr -d ' ')" = '29'
+          test "$(git hash-object .github/v0410-source-files/v0410.css)" = '0c2dd38494ce3ec1c0456d00be1803edd17f152d'
           sw_vers
 
       - name: Materialize exact repaired v0.4.10 production source
         run: |
           set -euxo pipefail
-          cat .github/v0410-source-patches/*.patch > /tmp/v0410-production.patch
+          : > /tmp/v0410-production.patch
+          for patch in .github/v0410-source-patches/*.patch; do
+            if [[ "$(basename "$patch")" == '027-v0410-css.patch' ]]; then
+              continue
+            fi
+            cat "$patch" >> /tmp/v0410-production.patch
+          done
           git apply --check /tmp/v0410-production.patch
           git apply /tmp/v0410-production.patch
+          cp .github/v0410-source-files/v0410.css v047_source/frontend/src/styles/v0410.css
+          test "$(git hash-object v047_source/frontend/src/styles/v0410.css)" = '0c2dd38494ce3ec1c0456d00be1803edd17f152d'
           git diff --check
           grep -q 'version = "0.4.10"' v047_source/backend/pyproject.toml
           grep -q 'title="VK Search", version="0.4.10"' v047_source/backend/app/main.py
@@ -75,7 +85,7 @@ jobs:
           for relative, wanted in expected.items():
               data = Path(relative).read_bytes()
               header = f'blob {len(data)}\0'.encode('ascii')
-              actual = hashlib.sha1(header + data).hexdigest()  # Git object identity.
+              actual = hashlib.sha1(header + data).hexdigest()
               if actual != wanted:
                   raise SystemExit(f'Protected sender/core mismatch: {relative}: {actual} != {wanted}')
           print(f'Protected sender/core verified: {len(expected)} files')
@@ -118,48 +128,14 @@ jobs:
           from pathlib import Path
 
           checks = {
-              'frontend/src/main.tsx': [
-                  'SessionUiStoreProvider',
-                  "./styles/v0410.css",
-              ],
-              'frontend/src/App.tsx': [
-                  'InboxScrollMemory',
-                  'key="success"',
-                  'key="failed"',
-              ],
-              'frontend/src/components/Shell.tsx': [
-                  'app-scale-layer',
-                  'app-overlay-root',
-                  'SessionViewportScroll',
-                  'SessionScrollMain',
-              ],
-              'frontend/src/pages/InboxPage.tsx': [
-                  'ScaledOverlay',
-                  'ScaledViewportOverlay',
-                  'draftsByDialogId',
-                  'INBOX_ACCOUNT_ORDER_STORAGE_KEY',
-                  'dialog-account-drag-handle',
-              ],
-              'frontend/src/pages/AccountsPage.tsx': [
-                  'ScaledOverlay',
-                  'account-drag-handle',
-              ],
-              'frontend/src/pages/ResultsPage.tsx': [
-                  'ScaledViewportOverlay',
-                  'results.',
-              ],
-              'frontend/src/pages/SettingsPage.tsx': [
-                  'SettingsSessionUi',
-                  'scrollTopBySection',
-              ],
-              'frontend/src/styles/v0410.css': [
-                  '.app-viewport',
-                  'position: fixed',
-                  '.app-overlay-root',
-                  '.voice-player',
-                  '.composer textarea.composer-input',
-                  '@media (max-width: 1250px)',
-              ],
+              'frontend/src/main.tsx': ['SessionUiStoreProvider', "./styles/v0410.css"],
+              'frontend/src/App.tsx': ['InboxScrollMemory', 'key="success"', 'key="failed"'],
+              'frontend/src/components/Shell.tsx': ['app-scale-layer', 'app-overlay-root', 'SessionViewportScroll', 'SessionScrollMain'],
+              'frontend/src/pages/InboxPage.tsx': ['ScaledOverlay', 'ScaledViewportOverlay', 'draftsByDialogId', 'INBOX_ACCOUNT_ORDER_STORAGE_KEY', 'dialog-account-drag-handle'],
+              'frontend/src/pages/AccountsPage.tsx': ['ScaledOverlay', 'account-drag-handle'],
+              'frontend/src/pages/ResultsPage.tsx': ['ScaledViewportOverlay', 'results.'],
+              'frontend/src/pages/SettingsPage.tsx': ['SettingsSessionUi', 'scrollTopBySection'],
+              'frontend/src/styles/v0410.css': ['.app-viewport', 'position: fixed', '.app-overlay-root', '.voice-player', '.composer textarea.composer-input', '@media (max-width: 1250px)'],
           }
           for relative, needles in checks.items():
               text = Path(relative).read_text(encoding='utf-8')
