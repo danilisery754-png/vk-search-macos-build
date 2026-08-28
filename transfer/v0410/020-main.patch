@@ -1,0 +1,28 @@
+--- a/v047_source/frontend/src/main.tsx
++++ b/v047_source/frontend/src/main.tsx
+@@ -4,10 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+ import { BrowserRouter } from 'react-router-dom'
+ import { Toaster } from 'sonner'
+ import App from './App'
++import { SessionUiStoreProvider } from './components/SessionUiStore'
+ import UiReadyReporter from './components/UiReadyReporter'
+ import './styles/global.css'
+ import './styles/v041.css'
+ import './styles/v049.css'
++import './styles/v0410.css'
+ 
+ const queryClient = new QueryClient({
+   defaultOptions: {
+@@ -20,10 +22,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
+     <QueryClientProvider client={queryClient}>
+       <BrowserRouter>
+         <UiReadyReporter />
+-        <App />
++        <SessionUiStoreProvider>
++          <App />
++        </SessionUiStoreProvider>
+         <Toaster richColors position="bottom-right" />
+       </BrowserRouter>
+     </QueryClientProvider>
+   </React.StrictMode>,
+ )
